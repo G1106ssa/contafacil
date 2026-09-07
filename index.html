@@ -3011,6 +3011,14 @@ function dropCSV(e) {
 }
 
 async function processarCSV(text) {
+  // Guarda contra arquivo binário (ex: .xlsx solto por engano na caixa de CSV) --
+  // sinal disso é a assinatura ZIP no início ou muitos caracteres de substituição
+  // Unicode (U+FFFD) resultantes de decodificar bytes binários como texto.
+  const pareceBinario = text.startsWith('PK\x03\x04') || (text.match(/\uFFFD/g) || []).length > 5;
+  if (pareceBinario) {
+    alert('Esse arquivo não parece ser um CSV de texto (pode ser um .xlsx solto aqui por engano).\n\nEssa caixa só aceita .csv. Se o arquivo for um Excel, abra-o e salve como "CSV (separado por vírgulas ou ponto e vírgula)" antes de importar.');
+    return;
+  }
   const linhas = text.trim().split(/\r?\n/);
   const sep = linhas[0].includes(';') ? ';' : ',';
 
