@@ -394,6 +394,8 @@ select option{background:var(--card2);}
 .cod-chamada-edit:hover{background:var(--accent-bg);border-color:var(--accent);transform:translateY(-1px);}
 .btn-del-conta{background:transparent;border:none;color:rgba(224,88,88,0.35);cursor:pointer;font-size:12px;padding:2px 5px;border-radius:3px;transition:all 0.15s;}
 .btn-del-conta:hover{color:var(--red);background:rgba(224,88,88,0.1);}
+.btn-edit-conta{background:transparent;border:none;color:rgba(90,168,224,0.45);cursor:pointer;font-size:12px;padding:2px 5px;border-radius:3px;transition:all 0.15s;}
+.btn-edit-conta:hover{color:var(--accent);background:rgba(90,168,224,0.12);}
 .upload-area{border:2px dashed var(--border);border-radius:3px;padding:20px;text-align:center;cursor:pointer;transition:all 0.15s;background:var(--surface2);}
 .upload-area:hover,.upload-area.drag{border-color:var(--accent);background:var(--accent-bg);}
 .upload-area p{color:var(--muted);font-size:12px;line-height:1.6;}
@@ -1027,7 +1029,7 @@ select option{background:var(--card2);}
       <div class="plano-grid">
         <div style="display:flex;flex-direction:column;gap:12px;">
           <div class="card">
-            <div class="card-header">Cadastrar Conta</div>
+            <div class="card-header" id="pc-form-header">Cadastrar Conta</div>
             <div style="display:flex;flex-direction:column;gap:10px;">
               <div class="modal-row">
                 <div class="input-group"><label>Classificação</label><input type="text" id="pc-codigo" placeholder="ex: 1-1-01-01-01"></div>
@@ -1078,7 +1080,8 @@ select option{background:var(--card2);}
                   <option value="IR">IR — IRPJ e CSLL</option>
                 </select>
               </div>
-              <button class="btn-gravar" onclick="cadastrarConta()" style="width:100%;">Adicionar Conta</button>
+              <button class="btn-gravar" id="pc-btn-salvar" onclick="cadastrarConta()" style="width:100%;">Adicionar Conta</button>
+              <button class="btn-cancelar" id="pc-btn-cancelar" onclick="cancelarEdicaoConta()" style="width:100%;display:none;">Cancelar Edição</button>
             </div>
           </div>
           <div class="card">
@@ -1590,6 +1593,7 @@ let CONTAS = [];
 let saldos = {};
 let historico = [];
 let filtroRazaoAtivo = 'todos';
+let _editandoContaId = null; // id da conta em edição no form "Cadastrar Conta" (null = modo cadastro normal)
 let lancSort = { campo: 'num', dir: 'desc' };
 let lancamentosTravados = localStorage.getItem('cf_trava_lanc') !== 'off'; // trava ativa por padrão
 let isAdmin = false; // definido em carregarPerfil() a partir da tabela 'perfis' do Supabase
@@ -2910,7 +2914,7 @@ function renderizarPlano() {
       <td><span style="font-size:11px;color:var(--muted);">${c.tipo}</span></td>
       <td>${indCtaTag}</td>
       <td>${dreTag}</td>
-      <td>${canDel ? `<button class="btn-del-conta" onclick="deletarConta('${c.id}')" title="Remover">✕</button>` : ''}</td>
+      <td><button class="btn-edit-conta" onclick="editarConta('${c.id}')" title="Editar classificação">✎</button>${canDel ? `<button class="btn-del-conta" onclick="deletarConta('${c.id}')" title="Remover">✕</button>` : ''}</td>
     </tr>`);
   });
   tbody.innerHTML = linhas.length ? linhas.join('') : `<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--muted);">Nenhuma conta encontrada${busca ? ` para "${buscaEl.value}"` : ''}.</td></tr>`;
@@ -2999,11 +3003,28 @@ async function cadastrarConta() {
 
   if (!codigo) { alert('Informe o código da conta.'); return; }
   if (!nome) { alert('Informe o nome da conta.'); return; }
-  if (CONTAS.find(c => c.codigo === codigo)) { alert(`Código ${codigo} já existe.`); return; }
+  if (CONTAS.find(c => c.codigo === codigo && c.id !== _editandoContaId)) { alert(`Código ${codigo} já existe.`); return; }
+
+  const retif = dre === 'DED';
+
+  // Modo edição: corrige uma conta já existente (classificação/nome/grupo/tipo/DRE).
+  // A chamada NUNCA muda por aqui -- é um código fixo, só editável pelo lápis dela mesma.
+  if (_editandoContaId) {
+    const c = CONTAS.find(x => x.id === _editandoContaId);
+    if (!c) { cancelarEdicaoConta(); return; }
+    const { error } = await sb.from('plano_contas').update({ codigo, nome, grupo, tipo, ind_cta: indCta, dre, retif }).eq('id', c.id).eq('empresa_id', empresaId);
+    if (error) { alert('Erro ao salvar: ' + error.message); return; }
+    Object.assign(c, { codigo, nome, grupo, tipo, indCta, dre: dre || undefined, retif });
+    const chamadaLbl = c.chamada || codigo;
+    cancelarEdicaoConta();
+    recalcularSaldos();
+    renderizarPlano(); renderizarTudo();
+    mostrarToast(`Conta ${chamadaLbl} — ${nome} atualizada.`);
+    return;
+  }
 
   const chamada = document.getElementById('pc-chamada')?.value?.trim() || '';
   const id = 'conta_' + codigo.replace(/[-\.]/g, '_') + '_' + Date.now();
-  const retif = dre === 'DED';
 
   const { erro } = await _insertContasComFallback([{
     id, empresa_id: empresaId, user_id: currentUser.id,
@@ -3019,6 +3040,41 @@ async function cadastrarConta() {
   document.getElementById('pc-dre').value = '';
   renderizarPlano();
   mostrarToast(`Conta ${chamada || codigo} — ${nome} adicionada${indCta === 'S' ? ' (sintética)' : ''}.`);
+}
+
+// Carrega uma conta existente no form "Cadastrar Conta" pra edição.
+// A chamada fica travada (não editável) -- ela é o código fixo de digitação rápida.
+function editarConta(id) {
+  const c = CONTAS.find(x => x.id === id);
+  if (!c) return;
+  _editandoContaId = id;
+  document.getElementById('pc-codigo').value = c.codigo || '';
+  const chamadaEl = document.getElementById('pc-chamada');
+  if (chamadaEl) { chamadaEl.value = c.chamada || ''; chamadaEl.disabled = true; }
+  document.getElementById('pc-nome').value = c.nome || '';
+  document.getElementById('pc-grupo').value = c.grupo || 'AC';
+  document.getElementById('pc-tipo').value = c.tipo || 'D';
+  const indEl = document.getElementById('pc-indcta'); if (indEl) indEl.value = c.indCta || 'A';
+  document.getElementById('pc-dre').value = c.dre || '';
+  document.getElementById('pc-form-header').textContent = `Editar Conta — ${c.chamada || c.codigo}`;
+  document.getElementById('pc-btn-salvar').textContent = 'Salvar Alterações';
+  document.getElementById('pc-btn-cancelar').style.display = 'block';
+  document.getElementById('pc-form-header').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelarEdicaoConta() {
+  _editandoContaId = null;
+  document.getElementById('pc-codigo').value = '';
+  const chamadaEl = document.getElementById('pc-chamada');
+  if (chamadaEl) { chamadaEl.value = ''; chamadaEl.disabled = false; }
+  document.getElementById('pc-nome').value = '';
+  document.getElementById('pc-grupo').value = 'AC';
+  document.getElementById('pc-tipo').value = 'D';
+  const indEl = document.getElementById('pc-indcta'); if (indEl) indEl.value = 'A';
+  document.getElementById('pc-dre').value = '';
+  document.getElementById('pc-form-header').textContent = 'Cadastrar Conta';
+  document.getElementById('pc-btn-salvar').textContent = 'Adicionar Conta';
+  document.getElementById('pc-btn-cancelar').style.display = 'none';
 }
 
 async function deletarConta(id) {
