@@ -1186,6 +1186,23 @@ select option{background:var(--card2);}
   </div>
 </div>
 
+<!-- Modal de confirmação genérico (substitui o confirm() nativo do navegador) -->
+<div class="modal-overlay" id="modal-confirm-generic" style="display:none;" onclick="if(event.target===event.currentTarget)_confirmModalResolve(false)">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header" id="modal-confirm-header">
+      <div class="modal-title"><i class="ti ti-help-circle" id="modal-confirm-icon"></i> <span id="modal-confirm-titulo">Confirmar</span></div>
+      <button class="modal-close" id="modal-confirm-close" onclick="_confirmModalResolve(false)">✕</button>
+    </div>
+    <div class="modal-body" style="padding:18px;">
+      <p id="modal-confirm-msg" style="margin:0;font-size:12.5px;color:var(--text2);line-height:1.6;white-space:pre-line;"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancelar" id="modal-confirm-btn-cancel" onclick="_confirmModalResolve(false)">Cancelar</button>
+      <button class="btn-gravar" id="modal-confirm-btn-ok" onclick="_confirmModalResolve(true)">OK</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════
 // SUPABASE CONFIG
@@ -1857,7 +1874,7 @@ async function apagarLancamento(idx) {
     return;
   }
   const h = historico[idx];
-  if (!confirm(`Apagar lançamento "${h.desc}" (${fmt(h.valor)})?`)) return;
+  if (!(await confirmarAcao(`Apagar lançamento "${h.desc}" (${fmt(h.valor)})?`, { titulo: 'Apagar Lançamento', perigo: true, textoOk: 'Apagar' }))) return;
 
   const { error } = await sb.from('lancamentos').delete().eq('id', h._dbId);
   if (error) { alert('Erro ao apagar: ' + error.message); return; }
@@ -2898,6 +2915,46 @@ function mascaraCEP(el) {
   el.value = v;
 }
 
+// ══════════════════════════════════════════════════
+// MODAL DE CONFIRMAÇÃO (substitui window.confirm)
+// ══════════════════════════════════════════════════
+let _confirmModalResolver = null;
+function _confirmModalResolve(valor) {
+  const overlay = document.getElementById('modal-confirm-generic');
+  overlay.style.display = 'none';
+  if (_confirmModalResolver) { const r = _confirmModalResolver; _confirmModalResolver = null; r(valor); }
+}
+// confirmarAcao(mensagem, { titulo, perigo, textoOk, textoCancelar }) -> Promise<boolean>
+// perigo:true deixa o cabeçalho e o botão OK em vermelho (ações destrutivas/irreversíveis).
+function confirmarAcao(mensagem, opts = {}) {
+  return new Promise(resolve => {
+    _confirmModalResolver = resolve;
+    document.getElementById('modal-confirm-titulo').textContent = opts.titulo || 'Confirmar';
+    document.getElementById('modal-confirm-msg').textContent = mensagem;
+    const header = document.getElementById('modal-confirm-header');
+    const btnOk = document.getElementById('modal-confirm-btn-ok');
+    const icon = document.getElementById('modal-confirm-icon');
+    if (opts.perigo) {
+      header.style.background = 'var(--red)'; header.style.color = '#fff';
+      btnOk.style.background = 'var(--red)';
+      icon.className = 'ti ti-alert-triangle';
+    } else {
+      header.style.background = ''; header.style.color = '';
+      btnOk.style.background = '';
+      icon.className = 'ti ti-help-circle';
+    }
+    btnOk.textContent = opts.textoOk || 'OK';
+    document.getElementById('modal-confirm-btn-cancel').textContent = opts.textoCancelar || 'Cancelar';
+    document.getElementById('modal-confirm-generic').style.display = 'flex';
+    setTimeout(() => btnOk.focus(), 60);
+  });
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !_confirmModalResolver) return;
+  const overlay = document.getElementById('modal-confirm-generic');
+  if (overlay && overlay.style.display === 'flex') _confirmModalResolve(false);
+});
+
 async function buscarCEP() {
   const cep = document.getElementById('emp-cep').value.replace(/\D/g, '');
   if (cep.length !== 8) return;
@@ -3049,7 +3106,7 @@ async function editarChamada(id) {
   const novo = novoRaw.trim() === '' ? null : _formatarChamada(novoRaw);
   if (novoRaw.trim() !== '' && !novo) { alert('Código inválido. Use apenas números, ex: 1 ou 0001.'); return; }
   if (novo && CONTAS.some(x => x.id !== id && x.chamada === novo)) {
-    if (!confirm(`O código ${novo} já está em uso por outra conta. Usar mesmo assim?`)) return;
+    if (!(await confirmarAcao(`O código ${novo} já está em uso por outra conta. Usar mesmo assim?`, { titulo: 'Código já em uso', textoOk: 'Usar mesmo assim' }))) return;
   }
   const { error } = await sb.from('plano_contas').update({ chamada: novo }).eq('id', id).eq('empresa_id', empresaId);
   if (error) { alert('Erro ao salvar: ' + error.message); return; }
@@ -3061,7 +3118,7 @@ async function editarChamada(id) {
 // Renumera TODAS as contas em sequência de 4 dígitos (0001, 0002, ...), na ordem atual da tabela
 async function renumerarChamadas() {
   const ordem = [...CONTAS].sort((a, b) => (a.codigo || '').localeCompare(b.codigo || '', undefined, { numeric: true }));
-  if (!confirm(`Isso vai substituir o código (chamada) de todas as ${ordem.length} contas por uma sequência 0001, 0002, 0003...\n\nSe você já preencheu uma planilha de lançamentos usando os códigos atuais e ainda não importou, os códigos vão mudar.\n\nContinuar?`)) return;
+  if (!(await confirmarAcao(`Isso vai substituir o código (chamada) de todas as ${ordem.length} contas por uma sequência 0001, 0002, 0003...\n\nSe você já preencheu uma planilha de lançamentos usando os códigos atuais e ainda não importou, os códigos vão mudar.`, { titulo: 'Renumerar todas as chamadas', perigo: true, textoOk: 'Renumerar' }))) return;
 
   mostrarToast('Renumerando contas...');
   const atualizacoes = ordem.map((c, i) => ({ id: c.id, chamada: String(i + 1).padStart(4, '0') }));
@@ -3180,7 +3237,7 @@ function cancelarEdicaoConta() {
 async function deletarConta(id) {
   const c = CONTAS.find(x => x.id === id);
   if (!c) return;
-  if (!confirm(`Remover "${c.chamada || c.codigo} — ${c.nome}"?`)) return;
+  if (!(await confirmarAcao(`"${c.chamada || c.codigo} — ${c.nome}"`, { titulo: 'Remover Conta', perigo: true, textoOk: 'Remover' }))) return;
   const { error } = await sb.from('plano_contas').delete().eq('id', id).eq('empresa_id', empresaId);
   if (error) { alert('Erro: ' + error.message); return; }
   const idx = CONTAS.indexOf(c); CONTAS.splice(idx, 1); delete saldos[id];
@@ -3395,12 +3452,14 @@ async function importarLancamentosCSV(input) {
   }
 
   if (erros.length) {
-    const ok = confirm(`${registros.length} lançamento(s) válido(s), ${erros.length} erro(s).\n\n` +
-      erros.slice(0, 5).join('\n') + (erros.length > 5 ? `\n... e mais ${erros.length - 5}` : '') +
-      '\n\nImportar os válidos?');
+    const ok = await confirmarAcao(
+      `${registros.length} lançamento(s) válido(s), ${erros.length} erro(s).\n\n` +
+      erros.slice(0, 5).join('\n') + (erros.length > 5 ? `\n... e mais ${erros.length - 5}` : ''),
+      { titulo: 'Importar lançamentos', textoOk: 'Importar válidos' }
+    );
     if (!ok) return;
   } else {
-    if (!confirm(`Importar ${registros.length} lançamento(s)?`)) return;
+    if (!(await confirmarAcao(`Importar ${registros.length} lançamento(s)?`, { titulo: 'Importar lançamentos', textoOk: 'Importar' }))) return;
   }
 
   let importados = 0;
@@ -3469,7 +3528,7 @@ async function restaurarPadrao() {
   });
 
   if (paraRemover.length === 0) {
-    if (!confirm('Nenhuma conta será removida (todas são do padrão ou já têm lançamentos).\n\nDeseja apenas garantir que as contas padrão que faltam sejam adicionadas?')) return;
+    if (!(await confirmarAcao('Nenhuma conta será removida (todas são do padrão ou já têm lançamentos).\n\nDeseja apenas garantir que as contas padrão que faltam sejam adicionadas?', { titulo: 'Restaurar padrão', textoOk: 'Adicionar faltantes' }))) return;
   } else {
     const lista = paraRemover.slice(0, 15).map(c => `• ${c.chamada || c.codigo || '—'} — ${c.nome}`).join('\n');
     const aviso = `ATENÇÃO: isso vai APAGAR PERMANENTEMENTE ${paraRemover.length} conta(s) que não fazem parte do plano padrão e não têm lançamentos:\n\n${lista}${paraRemover.length > 15 ? `\n... e mais ${paraRemover.length - 15}` : ''}\n\nEssa ação NÃO pode ser desfeita.`;
