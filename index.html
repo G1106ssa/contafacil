@@ -379,9 +379,17 @@ select option{background:var(--card2);}
 .plano-table td{padding:6px 10px;border-bottom:1px solid var(--subtle-border);vertical-align:middle;}
 .plano-table tr:hover td{background:var(--hover-row);}
 .plano-table tr.conta-nivel-1 td{font-weight:700;background:var(--header-bg);}
-.plano-table tr.conta-nivel-2 td:nth-child(2){padding-left:18px;color:var(--muted);}
-.plano-table tr.conta-nivel-3 td:nth-child(2){padding-left:32px;}
+.plano-table tr.conta-nivel-2 td:nth-child(2),.plano-table tr.conta-nivel-3 td:nth-child(2){color:var(--muted);}
+.plano-table tr.conta-sintetica td{font-style:italic;opacity:0.82;}
+.ind-cta-badge{display:inline-block;font-size:9px;font-weight:700;width:16px;height:16px;line-height:16px;text-align:center;border-radius:50%;transition:transform 0.15s;}
+.ind-cta-badge.ind-cta-s{background:rgba(148,148,148,0.20);color:var(--muted);}
+.ind-cta-badge.ind-cta-a{background:rgba(64,144,224,0.16);color:var(--accent);}
+.plano-table tr:hover .ind-cta-badge{transform:scale(1.15);}
+.plano-table tr.plano-categoria-row td{background:var(--accent-bg);padding:9px 10px;border-top:2px solid var(--accent);border-bottom:1px solid var(--accent);}
+.plano-categoria-label{font-size:12px;font-weight:800;letter-spacing:1.5px;color:var(--accent);}
 .cod-conta{font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.cod-chamada-edit{cursor:pointer;padding:2px 7px;border-radius:4px;transition:all 0.15s;border:1px solid transparent;}
+.cod-chamada-edit:hover{background:var(--accent-bg);border-color:var(--accent);transform:translateY(-1px);}
 .btn-del-conta{background:transparent;border:none;color:rgba(224,88,88,0.35);cursor:pointer;font-size:12px;padding:2px 5px;border-radius:3px;transition:all 0.15s;}
 .btn-del-conta:hover{color:var(--red);background:rgba(224,88,88,0.1);}
 .upload-area{border:2px dashed var(--border);border-radius:3px;padding:20px;text-align:center;cursor:pointer;transition:all 0.15s;background:var(--surface2);}
@@ -1044,6 +1052,13 @@ select option{background:var(--card2);}
                     <option value="D_RETIF">D_RETIF — Retif. Passivo</option>
                   </select>
                 </div>
+                <div class="input-group" style="max-width:150px">
+                  <label>Sint./Analít.</label>
+                  <select id="pc-indcta" title="Sintética = conta totalizadora (soma as filhas), não recebe lançamento direto. Analítica = recebe lançamento.">
+                    <option value="A">Analítica</option>
+                    <option value="S">Sintética</option>
+                  </select>
+                </div>
               </div>
               <div class="input-group">
                 <label>Vínculo DRE</label>
@@ -1079,11 +1094,14 @@ select option{background:var(--card2);}
           </div>
         </div>
         <div class="card">
-          <div class="card-header">Plano de Contas Ativo</div>
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+            <span>Plano de Contas Ativo</span>
+            <button class="btn-sm" onclick="renumerarChamadas()" title="Atribui um código sequencial de 4 dígitos (0001, 0002...) a todas as contas, na ordem da tabela">🔢 Renumerar Chamada (0000)</button>
+          </div>
           <div class="plano-stats" id="plano-stats"></div>
           <div style="overflow-x:auto;">
             <table class="plano-table">
-              <thead><tr><th>Chamada</th><th>Nome</th><th>Grupo</th><th>Tipo</th><th>DRE</th><th></th></tr></thead>
+              <thead><tr><th>Chamada</th><th>Nome</th><th>Grupo</th><th>Tipo</th><th>S/A</th><th>DRE</th><th></th></tr></thead>
               <tbody id="plano-tbody"></tbody>
             </table>
           </div>
@@ -1261,28 +1279,23 @@ async function logout() {
   document.getElementById('auth-screen').classList.remove('hidden');
 }
 
-// Carrega o perfil do usuário (admin ou não).
-// Se a tabela 'perfis' não existir no Supabase, assume admin (sistema single-user).
+// Carrega o perfil do usuário (admin ou não) da tabela 'perfis' no Supabase.
+// Falha fechada: qualquer erro/ausência => não-admin e trava forçada.
 async function carregarPerfil() {
-  isAdmin = true;
+  isAdmin = false;
   if (!currentUser) return;
   try {
-    const { data, error } = await sb.from('perfis').select('is_admin').eq('user_id', currentUser.id).maybeSingle();
-    if (error) {
-      // Tabela 'perfis' não existe — assume admin (single-user)
-      console.log('Tabela perfis não encontrada — modo admin padrão.');
-      isAdmin = true;
-    } else if (data) {
-      isAdmin = !!data.is_admin;
-    } else {
-      // Primeiro acesso: cria perfil como admin
-      await sb.from('perfis').insert({ user_id: currentUser.id, email: currentUser.email, is_admin: true }).catch(() => {});
-      isAdmin = true;
+    let { data, error } = await sb.from('perfis').select('is_admin').eq('user_id', currentUser.id).maybeSingle();
+    if (error) throw error;
+    if (!data) {
+      await sb.from('perfis').insert({ user_id: currentUser.id, email: currentUser.email });
+      data = { is_admin: false };
     }
+    isAdmin = !!data.is_admin;
   } catch (e) {
-    console.log('Erro ao carregar perfil:', e?.message || e);
-    isAdmin = true;
+    isAdmin = false;
   }
+  if (!isAdmin) lancamentosTravados = true; // não-admin sempre travado nesta sessão
   atualizarBotaoTrava();
 }
 
@@ -1441,149 +1454,82 @@ async function abrirNovaEmpresa() {
 // PLANO DE CONTAS (DEFAULT)
 // ══════════════════════════════════════════════════
 const CONTAS_PADRAO = [
-  // ── ATIVO CIRCULANTE (AC) ──
-  {slug:'caixa',codigo:'1-1-01-01-01',chamada:25,nome:'Caixa',grupo:'AC',tipo:'D'},
-  {slug:'bb_mov',codigo:'1-1-01-02-01',chamada:35,nome:'Banco do Brasil S/A.',grupo:'AC',tipo:'D'},
-  {slug:'itau_mov',codigo:'1-1-01-02-02',chamada:40,nome:'Banco Itaú S/A.',grupo:'AC',tipo:'D'},
-  {slug:'bradesco_mov',codigo:'1-1-01-02-03',chamada:45,nome:'Bradesco',grupo:'AC',tipo:'D'},
-  {slug:'aplic_bb',codigo:'1-1-01-03-01',chamada:55,nome:'Aplicações Banco do Brasil',grupo:'AC',tipo:'D'},
-  {slug:'aplic_itau',codigo:'1-1-01-03-02',chamada:60,nome:'Aplicações Banco Itaú',grupo:'AC',tipo:'D'},
-  {slug:'aplic_bradesco',codigo:'1-1-01-03-03',chamada:65,nome:'Aplicações Bradesco',grupo:'AC',tipo:'D'},
-  {slug:'duplicatas_rec',codigo:'1-1-04-01-01',chamada:95,nome:'Duplicatas a Receber',grupo:'AC',tipo:'D'},
-  {slug:'dupl_desc',codigo:'1-1-04-01-02',chamada:100,nome:'(-) Duplicatas Descontadas',grupo:'AC',tipo:'C_RETIF'},
-  {slug:'pcld',codigo:'1-1-04-01-03',chamada:105,nome:'(-) Prov. Créd. Liq. Duvidosa',grupo:'AC',tipo:'C_RETIF'},
-  {slug:'adiant_fornec',codigo:'1-1-05-01-01',chamada:125,nome:'Adiantamento a Fornecedor',grupo:'AC',tipo:'D'},
-  {slug:'adiant_sal',codigo:'1-1-05-02-01',chamada:135,nome:'Adiantamento Salários',grupo:'AC',tipo:'D'},
-  {slug:'adiant_viag',codigo:'1-1-05-03-01',chamada:160,nome:'Adiantamentos p/ Viagens',grupo:'AC',tipo:'D'},
-  {slug:'irrf_comp',codigo:'1-1-07-01-01',chamada:215,nome:'IRRF a Compensar',grupo:'AC',tipo:'D'},
-  {slug:'ir_compensar',codigo:'1-1-07-01-02',chamada:220,nome:'IR a Compensar/Restituir',grupo:'AC',tipo:'D'},
-  {slug:'csll_comp',codigo:'1-1-07-01-04',chamada:230,nome:'CSLL Retida na Fonte',grupo:'AC',tipo:'D'},
-  {slug:'cred_pis_cof',codigo:'1-1-07-01-08',chamada:250,nome:'Créditos de PIS e COFINS',grupo:'AC',tipo:'D'},
-  {slug:'prod_acabados',codigo:'1-1-08-01-01',chamada:290,nome:'Produtos Acabados',grupo:'AC',tipo:'D'},
-  {slug:'materia_prima',codigo:'1-1-08-01-03',chamada:300,nome:'Matéria-Prima',grupo:'AC',tipo:'D'},
-  {slug:'almoxarifado',codigo:'1-1-08-01-06',chamada:315,nome:'Almoxarifado',grupo:'AC',tipo:'D'},
-  {slug:'mercadorias',codigo:'1-1-08-01-07',chamada:320,nome:'Mercadorias para Venda',grupo:'AC',tipo:'D'},
-  {slug:'prov_perd_est',codigo:'1-1-08-01-08',chamada:325,nome:'(-) Prov. Perdas Estoques',grupo:'AC',tipo:'C_RETIF'},
-  {slug:'desp_antecip',codigo:'1-1-10-01-03',chamada:365,nome:'Despesas Antecipadas',grupo:'AC',tipo:'D'},
-  // ── ATIVO NÃO CIRCULANTE (ANC) ──
-  {slug:'partic_empres',codigo:'1-2-02-01-01',chamada:415,nome:'Participação em Empresas',grupo:'ANC',tipo:'D'},
-  {slug:'invest_outros',codigo:'1-2-02-01-02',chamada:420,nome:'Outros Investimentos',grupo:'ANC',tipo:'D'},
-  {slug:'mep',codigo:'1-2-02-01-03',chamada:425,nome:'Resultado do MEP',grupo:'ANC',tipo:'D'},
-  {slug:'terrenos',codigo:'1-2-03-01-01',chamada:445,nome:'Terrenos',grupo:'ANC',tipo:'D'},
-  {slug:'edificacoes',codigo:'1-2-03-01-02',chamada:450,nome:'Edificações',grupo:'ANC',tipo:'D'},
-  {slug:'instalacoes',codigo:'1-2-03-02-01',chamada:460,nome:'Instalações',grupo:'ANC',tipo:'D'},
-  {slug:'maq_equip',codigo:'1-2-03-03-01',chamada:470,nome:'Máquinas e Equipamentos',grupo:'ANC',tipo:'D'},
-  {slug:'hardware',codigo:'1-2-03-04-01',chamada:480,nome:'Equip. Processamento (Hardware)',grupo:'ANC',tipo:'D'},
-  {slug:'moveis_utens',codigo:'1-2-03-05-01',chamada:490,nome:'Móveis e Utensílios',grupo:'ANC',tipo:'D'},
-  {slug:'veiculos',codigo:'1-2-03-06-01',chamada:500,nome:'Veículos',grupo:'ANC',tipo:'D'},
-  {slug:'dep_edif',codigo:'1-2-04-01-01',chamada:555,nome:'(-) Depr. Acum. Edificações',grupo:'ANC',tipo:'C_RETIF'},
-  {slug:'dep_instal',codigo:'1-2-04-01-02',chamada:560,nome:'(-) Depr. Acum. Instalações',grupo:'ANC',tipo:'C_RETIF'},
-  {slug:'dep_maq',codigo:'1-2-04-01-03',chamada:565,nome:'(-) Depr. Acum. Máquinas',grupo:'ANC',tipo:'C_RETIF'},
-  {slug:'dep_hw',codigo:'1-2-04-01-04',chamada:570,nome:'(-) Depr. Acum. Hardware',grupo:'ANC',tipo:'C_RETIF'},
-  {slug:'dep_mov',codigo:'1-2-04-01-05',chamada:575,nome:'(-) Depr. Acum. Móveis',grupo:'ANC',tipo:'C_RETIF'},
-  {slug:'dep_veic',codigo:'1-2-04-01-06',chamada:580,nome:'(-) Depr. Acum. Veículos',grupo:'ANC',tipo:'C_RETIF'},
-  {slug:'software',codigo:'1-2-05-01-01',chamada:605,nome:'Sistema de Computação',grupo:'ANC',tipo:'D'},
-  {slug:'marcas',codigo:'1-2-05-01-02',chamada:610,nome:'Marcas Comerciais',grupo:'ANC',tipo:'D'},
-  {slug:'amort_intang',codigo:'1-2-05-01-05',chamada:625,nome:'(-) Amortização Acum. Intangível',grupo:'ANC',tipo:'C_RETIF'},
-  // ── PASSIVO CIRCULANTE (PC) ──
-  {slug:'emp_hipot_cp',codigo:'2-1-01-01-01',chamada:700,nome:'Empréstimos Hipotecários',grupo:'PC',tipo:'C'},
-  {slug:'emp_bb_cp',codigo:'2-1-01-02-01',chamada:710,nome:'Empréstimos Banco do Brasil',grupo:'PC',tipo:'C'},
-  {slug:'emp_brad_cp',codigo:'2-1-01-02-02',chamada:715,nome:'Empréstimos Bradesco',grupo:'PC',tipo:'C'},
-  {slug:'emp_itau_cp',codigo:'2-1-01-02-03',chamada:720,nome:'Empréstimos Banco Itaú',grupo:'PC',tipo:'C'},
-  {slug:'financ_cp',codigo:'2-1-02-01-01',chamada:755,nome:'Financ. Aquisição de Ativos CP',grupo:'PC',tipo:'C'},
-  {slug:'fornec_bens',codigo:'2-1-03-01-01',chamada:775,nome:'Fornecedores de Bens',grupo:'PC',tipo:'C'},
-  {slug:'fornec_serv',codigo:'2-1-03-01-02',chamada:780,nome:'Fornecedores de Serviços',grupo:'PC',tipo:'C'},
-  {slug:'irpj_pagar',codigo:'2-1-05-01-01',chamada:800,nome:'IRPJ a Pagar',grupo:'PC',tipo:'C'},
-  {slug:'csll_pagar',codigo:'2-1-05-01-02',chamada:805,nome:'CSLL a Pagar',grupo:'PC',tipo:'C'},
-  {slug:'iss_pagar',codigo:'2-1-05-01-03',chamada:810,nome:'ISS a Pagar',grupo:'PC',tipo:'C'},
-  {slug:'prev_pagar',codigo:'2-1-05-01-05',chamada:820,nome:'Contribuições Previdenciárias',grupo:'PC',tipo:'C'},
-  {slug:'fgts_pagar',codigo:'2-1-05-01-06',chamada:825,nome:'FGTS a Recolher',grupo:'PC',tipo:'C'},
-  {slug:'cofins_pis',codigo:'2-1-05-01-07',chamada:830,nome:'COFINS e PIS/PASEP a Pagar',grupo:'PC',tipo:'C'},
-  {slug:'irrf_func',codigo:'2-1-05-02-01',chamada:845,nome:'IRRF de Funcionários',grupo:'PC',tipo:'C'},
-  {slug:'salarios_pag',codigo:'2-1-06-01-01',chamada:940,nome:'Salários a Pagar',grupo:'PC',tipo:'C'},
-  {slug:'ferias_pag',codigo:'2-1-06-05-01',chamada:995,nome:'Férias a Pagar',grupo:'PC',tipo:'C'},
-  {slug:'enc_ferias',codigo:'2-1-06-05-02',chamada:1000,nome:'Encargos s/ Férias a Pagar',grupo:'PC',tipo:'C'},
-  {slug:'decimo_pag',codigo:'2-1-06-06-01',chamada:1010,nome:'13º Salário a Pagar',grupo:'PC',tipo:'C'},
-  {slug:'enc_decimo',codigo:'2-1-06-06-02',chamada:1015,nome:'Encargos s/ 13º a Pagar',grupo:'PC',tipo:'C'},
-  {slug:'cred_pagar',codigo:'2-1-08-01-01',chamada:1065,nome:'Credores Pessoa Física/Jurídica',grupo:'PC',tipo:'C'},
-  {slug:'alug_pagar',codigo:'2-1-09-01-01',chamada:1080,nome:'Aluguéis a Pagar',grupo:'PC',tipo:'C'},
-  {slug:'prov_13',codigo:'2-1-10-01-01',chamada:1105,nome:'Provisão 13º Salário',grupo:'PC',tipo:'C'},
-  {slug:'prov_ferias',codigo:'2-1-10-01-02',chamada:1110,nome:'Provisão Férias',grupo:'PC',tipo:'C'},
-  {slug:'prov_trib',codigo:'2-1-10-01-03',chamada:1115,nome:'Provisão Tributos/Contribuições',grupo:'PC',tipo:'C'},
-  // ── PASSIVO NÃO CIRCULANTE (PNC) ──
-  {slug:'emp_hipot_lp',codigo:'2-2-01-01-01',chamada:1140,nome:'Empréstimos Hipotecários LP',grupo:'PNC',tipo:'C'},
-  {slug:'emp_banc_lp',codigo:'2-2-01-01-02',chamada:1145,nome:'Empréstimos Bancários LP',grupo:'PNC',tipo:'C'},
-  {slug:'financ_lp',codigo:'2-2-01-02-01',chamada:1160,nome:'Financ. Aquisição de Ativos LP',grupo:'PNC',tipo:'C'},
-  // ── PATRIMÔNIO LÍQUIDO (PL) ──
-  {slug:'capital_cotas',codigo:'2-2-02-01-01',chamada:1180,nome:'Capital Social - Cotas',grupo:'PL',tipo:'C'},
-  {slug:'reserva_legal',codigo:'2-3-02-03-01',chamada:1250,nome:'Reserva Legal',grupo:'PL',tipo:'C'},
-  {slug:'reserva_estat',codigo:'2-3-02-03-02',chamada:1255,nome:'Reservas Estatutárias',grupo:'PL',tipo:'C'},
-  {slug:'reserva_reten',codigo:'2-3-02-03-06',chamada:1275,nome:'Reserva de Retenção de Lucros',grupo:'PL',tipo:'C'},
-  {slug:'lucros_apur',codigo:'2-3-03-01-01',chamada:1335,nome:'Lucros/Superávits Apurados',grupo:'PL',tipo:'C'},
-  {slug:'prej_apur',codigo:'2-3-03-01-02',chamada:1340,nome:'Prejuízos/Déficits Apurados',grupo:'PL',tipo:'D_RETIF'},
-  {slug:'result_exerc',codigo:'2-3-03-02-01',chamada:1360,nome:'Resultado do Exercício',grupo:'PL',tipo:'C'},
-  // ── RECEITAS (REC) ──
-  {slug:'venda_prod',codigo:'3-1-01-01-01',chamada:1415,nome:'Venda de Produtos',grupo:'REC',tipo:'C',dre:'ROB'},
-  {slug:'revenda_merc',codigo:'3-1-01-01-02',chamada:1420,nome:'Revenda de Mercadorias',grupo:'REC',tipo:'C',dre:'ROB'},
-  {slug:'prest_serv',codigo:'3-1-02-01-01',chamada:1435,nome:'Prestação de Serviços',grupo:'REC',tipo:'C',dre:'ROB'},
-  {slug:'cancel_dev',codigo:'3-2-01-01-01',chamada:1455,nome:'(-) Cancelamento e Devoluções',grupo:'REC',tipo:'D',dre:'DED',retif:true},
-  {slug:'abat_incond',codigo:'3-2-01-01-02',chamada:1460,nome:'(-) Abatimento Incondicional',grupo:'REC',tipo:'D',dre:'DED',retif:true},
-  {slug:'icms_venda',codigo:'3-2-01-01-03',chamada:1465,nome:'(-) ICMS s/ Vendas',grupo:'REC',tipo:'D',dre:'DED',retif:true},
-  {slug:'pis_venda',codigo:'3-2-01-01-04',chamada:1470,nome:'(-) PIS s/ Vendas',grupo:'REC',tipo:'D',dre:'DED',retif:true},
-  {slug:'cofins_venda',codigo:'3-2-01-01-05',chamada:1475,nome:'(-) COFINS s/ Vendas',grupo:'REC',tipo:'D',dre:'DED',retif:true},
-  {slug:'iss_serv',codigo:'3-2-02-01-03',chamada:1500,nome:'(-) ISS s/ Serviços',grupo:'REC',tipo:'D',dre:'DED',retif:true},
-  {slug:'rec_juros',codigo:'3-3-02-01-01',chamada:1540,nome:'Receita de Juros',grupo:'REC',tipo:'C',dre:'RFIN'},
-  {slug:'rec_atualiz',codigo:'3-3-02-01-02',chamada:1545,nome:'Receita Atualização Monetária',grupo:'REC',tipo:'C',dre:'RFIN'},
-  {slug:'rec_fin_out',codigo:'3-3-02-01-03',chamada:1550,nome:'Outras Receitas Financeiras',grupo:'REC',tipo:'C',dre:'RFIN'},
-  {slug:'rec_aluguel',codigo:'3-3-03-01-01',chamada:1635,nome:'Receita de Aluguel',grupo:'REC',tipo:'C',dre:'OREC'},
-  {slug:'rec_outras',codigo:'3-3-03-01-02',chamada:1640,nome:'Outras Receitas',grupo:'REC',tipo:'C',dre:'OREC'},
-  {slug:'rec_mep',codigo:'3-3-03-02-01',chamada:1650,nome:'Resultado Equiv. Patrimonial',grupo:'REC',tipo:'C',dre:'OREC'},
-  {slug:'rev_provisao',codigo:'3-3-04-01-01',chamada:1700,nome:'Reversão de Provisão',grupo:'REC',tipo:'C',dre:'OREC'},
-  // ── DESPESAS (DESP) ──
-  {slug:'cmv',codigo:'4-1-01-01-01',chamada:1725,nome:'CMV / CPV',grupo:'DESP',tipo:'D',dre:'CMV'},
-  {slug:'mat_diretos',codigo:'4-1-02-01-01',chamada:1740,nome:'Embalagens (Mat. Direto)',grupo:'DESP',tipo:'D',dre:'CMV'},
-  {slug:'honor_diret',codigo:'4-3-01-01-01',chamada:1840,nome:'Honorários de Diretoria',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'salarios_ord',codigo:'4-3-01-02-01',chamada:1885,nome:'Salários e Ordenados',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'gratif',codigo:'4-3-01-02-03',chamada:1895,nome:'Gratificações',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'decimo_sal',codigo:'4-3-01-02-04',chamada:1900,nome:'13º Salário',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'ferias_desp',codigo:'4-3-01-02-05',chamada:1905,nome:'Férias',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'aviso_previo',codigo:'4-3-01-03-01',chamada:1935,nome:'Aviso Prévio',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'indeniz_trab',codigo:'4-3-01-03-03',chamada:1945,nome:'Indenizações Trabalhistas',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'prev_social',codigo:'4-3-01-04-01',chamada:1960,nome:'Previdência Social',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'fgts_desp',codigo:'4-3-01-04-02',chamada:1965,nome:'FGTS',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'alimentacao',codigo:'4-3-01-06-01',chamada:1990,nome:'Alimentação ao Trabalhador',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'vale_transp',codigo:'4-3-01-07-01',chamada:2000,nome:'Vale Transporte',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'honor_adv',codigo:'4-3-02-01-01',chamada:2030,nome:'Honorários Advocatícios',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'honor_audit',codigo:'4-3-02-01-02',chamada:2035,nome:'Honorários de Auditoria',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'honor_consul',codigo:'4-3-02-01-03',chamada:2040,nome:'Honorários de Consultoria',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'fretes',codigo:'4-3-02-01-05',chamada:2050,nome:'Fretes e Carretos',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'aluguel_desp',codigo:'4-3-03-01-01',chamada:2080,nome:'Aluguel',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'condominio',codigo:'4-3-03-01-03',chamada:2090,nome:'Condomínios e Taxas',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'agua_luz_gas',codigo:'4-3-03-01-04',chamada:2095,nome:'Água, Luz e Gás',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'limpeza',codigo:'4-3-03-01-05',chamada:2100,nome:'Limpeza',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'consertos',codigo:'4-3-03-01-06',chamada:2105,nome:'Consertos',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'mat_exped',codigo:'4-3-03-02-01',chamada:2120,nome:'Material de Expediente',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'desp_legais',codigo:'4-3-03-02-02',chamada:2125,nome:'Despesas Legais',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'desp_banc',codigo:'4-3-03-02-03',chamada:2130,nome:'Despesas Bancárias',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'telefone',codigo:'4-3-03-04-02',chamada:2180,nome:'Telefone e Comunicação',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'viagens',codigo:'4-3-03-05-01',chamada:2195,nome:'Viagens',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'seg_imoveis',codigo:'4-3-03-06-01',chamada:2215,nome:'Seguros Bens Imóveis',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'seg_veiculos',codigo:'4-3-03-06-02',chamada:2220,nome:'Seguros Veículos',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'depreciacoes',codigo:'4-3-03-07-01',chamada:2245,nome:'Depreciações',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'amortizacoes',codigo:'4-3-03-08-01',chamada:2255,nome:'Amortizações',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'brindes',codigo:'4-3-04-01-01',chamada:2270,nome:'Brindes',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'multas',codigo:'4-3-05-04-02',chamada:2350,nome:'Multas e Acréscimos Moratórios',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'ipva',codigo:'4-4-01-01-01',chamada:2375,nome:'IPVA',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'iptu',codigo:'4-4-01-01-02',chamada:2380,nome:'IPTU',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'pis_desp',codigo:'4-4-01-02-01',chamada:2390,nome:'PIS/PASEP',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'contrib_sind',codigo:'4-4-01-02-02',chamada:2395,nome:'Contribuição Sindical Patronal',grupo:'DESP',tipo:'D',dre:'DOPS'},
-  {slug:'juros_emp',codigo:'4-5-03-01-02',chamada:2510,nome:'Juros s/ Empréstimos Bancários',grupo:'DESP',tipo:'D',dre:'DFIN'},
-  {slug:'juros_financ',codigo:'4-5-03-02-01',chamada:2525,nome:'Juros s/ Financiamentos',grupo:'DESP',tipo:'D',dre:'DFIN'},
-  {slug:'desp_juros',codigo:'4-5-04-01-01',chamada:2555,nome:'Juros Passivos',grupo:'DESP',tipo:'D',dre:'DFIN'},
-  {slug:'desp_atualiz',codigo:'4-5-04-01-02',chamada:2560,nome:'Atualização Monetária Passiva',grupo:'DESP',tipo:'D',dre:'DFIN'},
-  {slug:'desp_iof',codigo:'4-5-04-04-02',chamada:2600,nome:'IOF',grupo:'DESP',tipo:'D',dre:'DFIN'},
-  {slug:'irpj_desp',codigo:'4-6-02-01-01',chamada:2725,nome:'IRPJ',grupo:'DESP',tipo:'D',dre:'IR'},
-  {slug:'csll_desp',codigo:'4-6-02-01-02',chamada:2730,nome:'CSLL',grupo:'DESP',tipo:'D',dre:'IR'},
+  {slug:'c1',codigo:'1',chamada:'0001',nome:'ATIVO',grupo:'AC',tipo:'D',indCta:'S'},
+  {slug:'c1_1',codigo:'1-1',chamada:'0002',nome:'ATIVO CIRCULANTE',grupo:'AC',tipo:'D',indCta:'S'},
+  {slug:'c1_1_1',codigo:'1-1-1',chamada:'0003',nome:'DISPONIBILIDADES',grupo:'AC',tipo:'D',indCta:'S'},
+  {slug:'c1_1_1_01',codigo:'1-1-1-01',chamada:'0004',nome:'Caixa e Equivalentes de Caixa',grupo:'AC',tipo:'D',indCta:'S'},
+  {slug:'c1_1_1_01_0001',codigo:'1-1-1-01-0001',chamada:'0005',nome:'Caixa Geral',grupo:'AC',tipo:'D',indCta:'A'},
+  {slug:'c1_1_1_01_0002',codigo:'1-1-1-01-0002',chamada:'0006',nome:'Banco Conta Movimento',grupo:'AC',tipo:'D',indCta:'A'},
+  {slug:'c1_1_1_01_0003',codigo:'1-1-1-01-0003',chamada:'0007',nome:'Aplicacoes de Liquidez Imediata',grupo:'AC',tipo:'D',indCta:'A'},
+  {slug:'c1_1_2',codigo:'1-1-2',chamada:'0008',nome:'CLIENTES E CONTAS A RECEBER',grupo:'AC',tipo:'D',indCta:'S'},
+  {slug:'c1_1_2_01',codigo:'1-1-2-01',chamada:'0009',nome:'Clientes no Pais',grupo:'AC',tipo:'D',indCta:'S'},
+  {slug:'c1_1_2_01_0001',codigo:'1-1-2-01-0001',chamada:'0010',nome:'Servicos a Receber',grupo:'AC',tipo:'D',indCta:'A'},
+  {slug:'c1_1_3',codigo:'1-1-3',chamada:'0011',nome:'TRIBUTOS A RECUPERAR / COMPENSAR',grupo:'AC',tipo:'D',indCta:'S'},
+  {slug:'c1_1_3_01',codigo:'1-1-3-01',chamada:'0012',nome:'Impostos Retidos na Fonte',grupo:'AC',tipo:'D',indCta:'S'},
+  {slug:'c1_1_3_01_0001',codigo:'1-1-3-01-0001',chamada:'0013',nome:'IRRF a Compensar',grupo:'AC',tipo:'D',indCta:'A'},
+  {slug:'c1_1_3_01_0002',codigo:'1-1-3-01-0002',chamada:'0014',nome:'CSLL Retida na Fonte a Compensar',grupo:'AC',tipo:'D',indCta:'A'},
+  {slug:'c1_1_3_01_0003',codigo:'1-1-3-01-0003',chamada:'0015',nome:'PIS Retido a Compensar',grupo:'AC',tipo:'D',indCta:'A'},
+  {slug:'c1_1_3_01_0004',codigo:'1-1-3-01-0004',chamada:'0016',nome:'COFINS Retida a Compensar',grupo:'AC',tipo:'D',indCta:'A'},
+  {slug:'c1_1_3_01_0005',codigo:'1-1-3-01-0005',chamada:'0017',nome:'ISS Retido a Compensar',grupo:'AC',tipo:'D',indCta:'A'},
+  {slug:'c1_1_3_01_0006',codigo:'1-1-3-01-0006',chamada:'0018',nome:'INSS Retido a Compensar',grupo:'AC',tipo:'D',indCta:'A'},
+  {slug:'c2',codigo:'2',chamada:'0019',nome:'PASSIVO E PATRIMONIO LIQUIDO',grupo:'PC',tipo:'C',indCta:'S'},
+  {slug:'c2_1',codigo:'2-1',chamada:'0020',nome:'PASSIVO CIRCULANTE',grupo:'PC',tipo:'C',indCta:'S'},
+  {slug:'c2_1_1',codigo:'2-1-1',chamada:'0021',nome:'FORNECEDORES',grupo:'PC',tipo:'C',indCta:'S'},
+  {slug:'c2_1_1_01',codigo:'2-1-1-01',chamada:'0022',nome:'Fornecedores Nacionais',grupo:'PC',tipo:'C',indCta:'S'},
+  {slug:'c2_1_1_01_0001',codigo:'2-1-1-01-0001',chamada:'0023',nome:'Fornecedores de Servicos a Pagar',grupo:'PC',tipo:'C',indCta:'A'},
+  {slug:'c2_1_2',codigo:'2-1-2',chamada:'0024',nome:'OBRIGACOES TRABALHISTAS E PREVIDENCIARIAS',grupo:'PC',tipo:'C',indCta:'S'},
+  {slug:'c2_1_2_01',codigo:'2-1-2-01',chamada:'0025',nome:'Folha de Pagamento e Encargos',grupo:'PC',tipo:'C',indCta:'S'},
+  {slug:'c2_1_2_01_0001',codigo:'2-1-2-01-0001',chamada:'0026',nome:'Salarios e Ordenados a Pagar',grupo:'PC',tipo:'C',indCta:'A'},
+  {slug:'c2_1_2_01_0002',codigo:'2-1-2-01-0002',chamada:'0027',nome:'INSS a Recolher',grupo:'PC',tipo:'C',indCta:'A'},
+  {slug:'c2_1_2_01_0003',codigo:'2-1-2-01-0003',chamada:'0028',nome:'FGTS a Recolher',grupo:'PC',tipo:'C',indCta:'A'},
+  {slug:'c2_1_2_01_0004',codigo:'2-1-2-01-0004',chamada:'0029',nome:'Provisao de Ferias e Encargos',grupo:'PC',tipo:'C',indCta:'A'},
+  {slug:'c2_1_2_01_0005',codigo:'2-1-2-01-0005',chamada:'0030',nome:'Provisao de 13o Salario e Encargos',grupo:'PC',tipo:'C',indCta:'A'},
+  {slug:'c2_1_3',codigo:'2-1-3',chamada:'0031',nome:'OBRIGACOES FISCAIS',grupo:'PC',tipo:'C',indCta:'S'},
+  {slug:'c2_1_3_01',codigo:'2-1-3-01',chamada:'0032',nome:'Impostos e Contribuicoes a Recolher',grupo:'PC',tipo:'C',indCta:'S'},
+  {slug:'c2_1_3_01_0001',codigo:'2-1-3-01-0001',chamada:'0033',nome:'Simples Nacional a Recolher',grupo:'PC',tipo:'C',indCta:'A'},
+  {slug:'c2_1_3_01_0002',codigo:'2-1-3-01-0002',chamada:'0034',nome:'ISS a Recolher',grupo:'PC',tipo:'C',indCta:'A'},
+  {slug:'c2_1_3_01_0003',codigo:'2-1-3-01-0003',chamada:'0035',nome:'PIS a Recolher',grupo:'PC',tipo:'C',indCta:'A'},
+  {slug:'c2_1_3_01_0004',codigo:'2-1-3-01-0004',chamada:'0036',nome:'COFINS a Recolher',grupo:'PC',tipo:'C',indCta:'A'},
+  {slug:'c2_1_3_01_0005',codigo:'2-1-3-01-0005',chamada:'0037',nome:'IRPJ a Recolher',grupo:'PC',tipo:'C',indCta:'A'},
+  {slug:'c2_1_3_01_0006',codigo:'2-1-3-01-0006',chamada:'0038',nome:'CSLL a Recolher',grupo:'PC',tipo:'C',indCta:'A'},
+  {slug:'c2_3',codigo:'2-3',chamada:'0039',nome:'PATRIMONIO LIQUIDO',grupo:'PL',tipo:'C',indCta:'S'},
+  {slug:'c2_3_1',codigo:'2-3-1',chamada:'0040',nome:'CAPITAL SOCIAL',grupo:'PL',tipo:'C',indCta:'S'},
+  {slug:'c2_3_1_01',codigo:'2-3-1-01',chamada:'0041',nome:'Capital Subscrito e Integralizado',grupo:'PL',tipo:'C',indCta:'S'},
+  {slug:'c2_3_1_01_0001',codigo:'2-3-1-01-0001',chamada:'0042',nome:'Capital Social Integralizado',grupo:'PL',tipo:'C',indCta:'A'},
+  {slug:'c3',codigo:'3',chamada:'0043',nome:'RECEITAS',grupo:'REC',tipo:'C',indCta:'S'},
+  {slug:'c3_1',codigo:'3-1',chamada:'0044',nome:'RECEITA OPERACIONAL BRUTA',grupo:'REC',tipo:'C',indCta:'S',dre:'ROB'},
+  {slug:'c3_1_1',codigo:'3-1-1',chamada:'0045',nome:'RECEITA DE PRESTACAO DE SERVICOS',grupo:'REC',tipo:'C',indCta:'S',dre:'ROB'},
+  {slug:'c3_1_1_01',codigo:'3-1-1-01',chamada:'0046',nome:'Servicos Prestados no Mercado Interno',grupo:'REC',tipo:'C',indCta:'S',dre:'ROB'},
+  {slug:'c3_1_1_01_0001',codigo:'3-1-1-01-0001',chamada:'0047',nome:'Receita de Assessoria e Consultoria',grupo:'REC',tipo:'C',indCta:'A',dre:'ROB'},
+  {slug:'c3_1_1_01_0002',codigo:'3-1-1-01-0002',chamada:'0048',nome:'Receita de Servicos em Geral',grupo:'REC',tipo:'C',indCta:'A',dre:'ROB'},
+  {slug:'c3_2',codigo:'3-2',chamada:'0049',nome:'DEDUCOES DA RECEITA BRUTA',grupo:'REC',tipo:'D',indCta:'S',dre:'DED'},
+  {slug:'c3_2_1',codigo:'3-2-1',chamada:'0050',nome:'TRIBUTOS INCIDENTES SOBRE O FATURAMENTO',grupo:'REC',tipo:'D',indCta:'S',dre:'DED'},
+  {slug:'c3_2_1_01',codigo:'3-2-1-01',chamada:'0051',nome:'Impostos e Contribuicoes',grupo:'REC',tipo:'D',indCta:'S',dre:'DED'},
+  {slug:'c3_2_1_01_0001',codigo:'3-2-1-01-0001',chamada:'0052',nome:'Simples Nacional sobre Faturamento',grupo:'REC',tipo:'D',indCta:'A',dre:'DED',retif:true},
+  {slug:'c3_2_1_01_0002',codigo:'3-2-1-01-0002',chamada:'0053',nome:'ISS sobre Faturamento',grupo:'REC',tipo:'D',indCta:'A',dre:'DED',retif:true},
+  {slug:'c3_2_1_01_0003',codigo:'3-2-1-01-0003',chamada:'0054',nome:'PIS sobre Faturamento',grupo:'REC',tipo:'D',indCta:'A',dre:'DED',retif:true},
+  {slug:'c3_2_1_01_0004',codigo:'3-2-1-01-0004',chamada:'0055',nome:'COFINS sobre Faturamento',grupo:'REC',tipo:'D',indCta:'A',dre:'DED',retif:true},
+  {slug:'c4',codigo:'4',chamada:'0056',nome:'CUSTOS E DESPESAS',grupo:'DESP',tipo:'D',indCta:'S'},
+  {slug:'c4_1',codigo:'4-1',chamada:'0057',nome:'CUSTO DOS SERVICOS PRESTADOS (CSP)',grupo:'DESP',tipo:'D',indCta:'S',dre:'CMV'},
+  {slug:'c4_1_1',codigo:'4-1-1',chamada:'0058',nome:'CUSTOS DIRETOS DA OPERACAO',grupo:'DESP',tipo:'D',indCta:'S',dre:'CMV'},
+  {slug:'c4_1_1_01',codigo:'4-1-1-01',chamada:'0059',nome:'Pessoal Operacional (Ligado ao Servico)',grupo:'DESP',tipo:'D',indCta:'S',dre:'CMV'},
+  {slug:'c4_1_1_01_0001',codigo:'4-1-1-01-0001',chamada:'0060',nome:'Salarios e Encargos - Equipe Operacional',grupo:'DESP',tipo:'D',indCta:'A',dre:'CMV'},
+  {slug:'c4_1_1_02',codigo:'4-1-1-02',chamada:'0061',nome:'Terceiros e Subcontratacoes',grupo:'DESP',tipo:'D',indCta:'S',dre:'CMV'},
+  {slug:'c4_1_1_02_0001',codigo:'4-1-1-02-0001',chamada:'0062',nome:'Servicos Prestados por PJ (Subcontratacao)',grupo:'DESP',tipo:'D',indCta:'A',dre:'CMV'},
+  {slug:'c4_1_1_03',codigo:'4-1-1-03',chamada:'0063',nome:'Infraestrutura de Servicos',grupo:'DESP',tipo:'D',indCta:'S',dre:'CMV'},
+  {slug:'c4_1_1_03_0001',codigo:'4-1-1-03-0001',chamada:'0064',nome:'Licencas de Software e Hospedagem',grupo:'DESP',tipo:'D',indCta:'A',dre:'CMV'},
+  {slug:'c4_2',codigo:'4-2',chamada:'0065',nome:'DESPESAS OPERACIONAIS',grupo:'DESP',tipo:'D',indCta:'S',dre:'DOPS'},
+  {slug:'c4_2_1',codigo:'4-2-1',chamada:'0066',nome:'DESPESAS ADMINISTRATIVAS E COMERCIAIS',grupo:'DESP',tipo:'D',indCta:'S',dre:'DOPS'},
+  {slug:'c4_2_1_01',codigo:'4-2-1-01',chamada:'0067',nome:'Pessoal Administrativo',grupo:'DESP',tipo:'D',indCta:'S',dre:'DOPS'},
+  {slug:'c4_2_1_01_0001',codigo:'4-2-1-01-0001',chamada:'0068',nome:'Pro-labore dos Socios',grupo:'DESP',tipo:'D',indCta:'A',dre:'DOPS'},
+  {slug:'c4_2_1_01_0002',codigo:'4-2-1-01-0002',chamada:'0069',nome:'Salarios e Encargos - Administrativo',grupo:'DESP',tipo:'D',indCta:'A',dre:'DOPS'},
+  {slug:'c4_2_1_02',codigo:'4-2-1-02',chamada:'0070',nome:'Instalacoes e Ocupacao',grupo:'DESP',tipo:'D',indCta:'S',dre:'DOPS'},
+  {slug:'c4_2_1_02_0001',codigo:'4-2-1-02-0001',chamada:'0071',nome:'Aluguel e Condominio',grupo:'DESP',tipo:'D',indCta:'A',dre:'DOPS'},
+  {slug:'c4_2_1_02_0002',codigo:'4-2-1-02-0002',chamada:'0072',nome:'Energia Eletrica e Internet',grupo:'DESP',tipo:'D',indCta:'A',dre:'DOPS'},
+  {slug:'c4_2_1_03',codigo:'4-2-1-03',chamada:'0073',nome:'Despesas Gerais e Tributarias',grupo:'DESP',tipo:'D',indCta:'S',dre:'DOPS'},
+  {slug:'c4_2_1_03_0001',codigo:'4-2-1-03-0001',chamada:'0074',nome:'Honorarios Contabeis',grupo:'DESP',tipo:'D',indCta:'A',dre:'DOPS'},
+  {slug:'c4_2_1_03_0002',codigo:'4-2-1-03-0002',chamada:'0075',nome:'Tarifas Bancarias',grupo:'DESP',tipo:'D',indCta:'A',dre:'DOPS'},
+  {slug:'c4_2_1_03_0003',codigo:'4-2-1-03-0003',chamada:'0076',nome:'Taxas e Alvaras Municipais (TLF, Sanitaria, etc)',grupo:'DESP',tipo:'D',indCta:'A',dre:'DOPS'},
 ];
 
 function gerarIdConta(slug, idx) {
@@ -1598,19 +1544,36 @@ function contaPorChamada(ch) {
   return CONTAS.find(c => c.chamada == ch);
 }
 
+// Insere linhas em plano_contas em lotes (chunks), removendo automaticamente colunas que ainda não
+// existem no banco (schema desatualizado, ex: falta 'chamada' ou 'ind_cta') e tentando de novo.
+// Retorna { inseridos: [linhas que realmente entraram no banco], erro: null|Error }
+async function _insertContasComFallback(rows, chunkSize = 200) {
+  const colunasRemovidas = new Set();
+  const inseridos = [];
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    let chunk = rows.slice(i, i + chunkSize).map(r => ({ ...r }));
+    let ok = false;
+    for (let tentativa = 0; tentativa < 6; tentativa++) {
+      colunasRemovidas.forEach(col => chunk.forEach(r => delete r[col]));
+      const { error } = await sb.from('plano_contas').insert(chunk);
+      if (!error) { ok = true; break; }
+      const m = error.message && error.message.match(/Could not find the '(\w+)' column/);
+      if (m && !colunasRemovidas.has(m[1])) { colunasRemovidas.add(m[1]); continue; }
+      return { inseridos, erro: error };
+    }
+    if (ok) inseridos.push(...chunk);
+  }
+  return { inseridos, erro: null };
+}
+
 async function salvarPlanoInicial() {
   const rows = CONTAS_PADRAO.map((c, i) => ({
     id: gerarIdConta(c.slug, i), empresa_id: empresaId, user_id: currentUser.id,
     codigo: c.codigo, chamada: String(c.chamada), nome: c.nome, grupo: c.grupo, tipo: c.tipo,
-    dre: c.dre || null, retif: c.retif || false
+    ind_cta: c.indCta || 'A', dre: c.dre || null, retif: c.retif || false
   }));
-  let { error } = await sb.from('plano_contas').insert(rows);
-  if (error && error.message.includes('chamada')) {
-    const rowsSem = rows.map(({chamada, ...r}) => r);
-    const res = await sb.from('plano_contas').insert(rowsSem);
-    error = res.error;
-  }
-  if (error) throw error;
+  const { erro } = await _insertContasComFallback(rows);
+  if (erro) throw erro;
 }
 
 // ══════════════════════════════════════════════════
@@ -1631,7 +1594,7 @@ async function carregarPlanoDeContas() {
   if (error) throw error;
   CONTAS = data.map(c => ({
     id: c.id, codigo: c.codigo, chamada: c.chamada || '', nome: c.nome, grupo: c.grupo, tipo: c.tipo,
-    dre: c.dre || undefined, retif: c.retif || false
+    indCta: c.ind_cta || 'A', dre: c.dre || undefined, retif: c.retif || false
   }));
   saldos = {};
   CONTAS.forEach(c => saldos[c.id] = 0);
@@ -2637,6 +2600,12 @@ function renderizarBalancete() {
 // ══════════════════════════════════════════════════
 const GRP_LABELS = { AC: 'Ativo Circ.', ANC: 'Ativo N.C.', PC: 'Pass. Circ.', PNC: 'Pass. N.C.', PL: 'PL', REC: 'Receita', DESP: 'Despesa' };
 const GRP_COLORS = { AC: 'badge-AC', ANC: 'badge-ANC', PC: 'badge-PC', PNC: 'badge-PNC', PL: 'badge-PL', REC: 'badge-REC', DESP: 'badge-DESP' };
+// Ordem fixa de exibição do plano de contas: sempre agrupado pelo campo 'grupo' (independente do
+// código digitado), e só depois ordenado por código dentro de cada grupo.
+const GRP_ORDEM = { AC: 0, ANC: 1, PC: 2, PNC: 3, PL: 4, REC: 5, DESP: 6 };
+// Categoria macro de cada grupo, pra separar visualmente o plano de contas em 4 blocos bem
+// distintos (pedido do usuário): ATIVO | PASSIVO (inclui PL) | RECEITA | DESPESA.
+const GRP_CATEGORIA = { AC: 'ATIVO', ANC: 'ATIVO', PC: 'PASSIVO', PNC: 'PASSIVO', PL: 'PASSIVO', REC: 'RECEITA', DESP: 'DESPESA' };
 
 // ══════════════════════════════════════════════════
 // CADASTRO — NAVEGAÇÃO E EMPRESA
@@ -2862,31 +2831,96 @@ async function salvarDadosEmpresa() {
 
 function renderizarPlano() {
   const tbody = document.getElementById('plano-tbody');
-  const sorted = [...CONTAS].sort((a, b) => (a.codigo || '').localeCompare(b.codigo || '', undefined, { numeric: true }));
-  tbody.innerHTML = sorted.map(c => {
+  const sorted = [...CONTAS].sort((a, b) => {
+    const og = (GRP_ORDEM[a.grupo] ?? 99) - (GRP_ORDEM[b.grupo] ?? 99);
+    if (og !== 0) return og;
+    return (a.codigo || '').localeCompare(b.codigo || '', undefined, { numeric: true });
+  });
+  let categoriaAnterior = null;
+  const linhas = [];
+  sorted.forEach(c => {
+    const categoria = GRP_CATEGORIA[c.grupo] || '—';
+    if (categoria !== categoriaAnterior) {
+      linhas.push(`<tr class="plano-categoria-row"><td colspan="7"><span class="plano-categoria-label">${categoria}</span></td></tr>`);
+      categoriaAnterior = categoria;
+    }
     const nivel = (c.codigo || '').split('-').length;
     const rowClass = nivel <= 2 ? 'conta-nivel-1' : nivel <= 3 ? 'conta-nivel-2' : 'conta-nivel-3';
+    const sintetica = c.indCta === 'S';
+    const indent = Math.max(0, nivel - 2) * 14;
     const dreTag = c.dre ? `<span style="font-size:9px;background:rgba(224,144,64,0.12);color:var(--orange);padding:1px 5px;border-radius:3px;font-weight:600;">${c.dre}</span>` : '<span style="color:var(--border)">—</span>';
+    const indCtaTag = sintetica
+      ? `<span class="ind-cta-badge ind-cta-s" title="Sintética — conta totalizadora, não recebe lançamento direto">S</span>`
+      : `<span class="ind-cta-badge ind-cta-a" title="Analítica — recebe lançamento">A</span>`;
     const canDel = !historico.some(h => h.debitoId === c.id || h.creditoId === c.id);
-    return `<tr class="${rowClass}">
-      <td><span class="cod-conta">${c.chamada || c.codigo || '—'}</span></td>
-      <td>${c.nome}</td>
+    linhas.push(`<tr class="${rowClass}${sintetica ? ' conta-sintetica' : ''}">
+      <td><span class="cod-conta cod-chamada-edit" onclick="editarChamada('${c.id}')" title="Clique para editar o código">${c.chamada || '—'}</span></td>
+      <td style="padding-left:${indent}px">${c.nome}</td>
       <td><span class="grupo-badge ${GRP_COLORS[c.grupo]}">${GRP_LABELS[c.grupo]}</span></td>
       <td><span style="font-size:11px;color:var(--muted);">${c.tipo}</span></td>
+      <td>${indCtaTag}</td>
       <td>${dreTag}</td>
       <td>${canDel ? `<button class="btn-del-conta" onclick="deletarConta('${c.id}')" title="Remover">✕</button>` : ''}</td>
-    </tr>`;
-  }).join('');
+    </tr>`);
+  });
+  tbody.innerHTML = linhas.join('');
   const stats = [
     { label: 'Total', val: CONTAS.length },
     { label: 'Ativo', val: CONTAS.filter(c => c.grupo === 'AC' || c.grupo === 'ANC').length },
     { label: 'Passivo + PL', val: CONTAS.filter(c => ['PC', 'PNC', 'PL'].includes(c.grupo)).length },
     { label: 'Resultado', val: CONTAS.filter(c => c.grupo === 'REC' || c.grupo === 'DESP').length },
+    { label: 'Sintéticas', val: CONTAS.filter(c => c.indCta === 'S').length },
+    { label: 'Analíticas', val: CONTAS.filter(c => c.indCta !== 'S').length },
   ];
   document.getElementById('plano-stats').innerHTML = stats.map(s =>
     `<div class="plano-stat"><span>${s.val}</span>${s.label}</div>`).join('');
   atualizarSelects();
   atualizarSelectRazao();
+}
+
+// Formata um número (ou string) no padrão de código de 4 dígitos: 1 -> "0001"
+function _formatarChamada(n) {
+  const num = parseInt(String(n).replace(/\D/g, ''), 10);
+  if (isNaN(num)) return '';
+  return String(num).padStart(4, '0');
+}
+
+// Edita o código (chamada) de UMA conta, via prompt simples
+async function editarChamada(id) {
+  const c = CONTAS.find(x => x.id === id);
+  if (!c) return;
+  const atual = c.chamada || '';
+  const novoRaw = prompt(`Código rápido de "${c.nome}"\n(estrutura 0000, ex: 0001)`, atual);
+  if (novoRaw === null) return; // cancelou
+  const novo = novoRaw.trim() === '' ? null : _formatarChamada(novoRaw);
+  if (novoRaw.trim() !== '' && !novo) { alert('Código inválido. Use apenas números, ex: 1 ou 0001.'); return; }
+  if (novo && CONTAS.some(x => x.id !== id && x.chamada === novo)) {
+    if (!confirm(`O código ${novo} já está em uso por outra conta. Usar mesmo assim?`)) return;
+  }
+  const { error } = await sb.from('plano_contas').update({ chamada: novo }).eq('id', id).eq('empresa_id', empresaId);
+  if (error) { alert('Erro ao salvar: ' + error.message); return; }
+  c.chamada = novo || '';
+  renderizarPlano();
+  mostrarToast(`Código de "${c.nome}" atualizado para ${novo || '(vazio)'}.`);
+}
+
+// Renumera TODAS as contas em sequência de 4 dígitos (0001, 0002, ...), na ordem atual da tabela
+async function renumerarChamadas() {
+  const ordem = [...CONTAS].sort((a, b) => (a.codigo || '').localeCompare(b.codigo || '', undefined, { numeric: true }));
+  if (!confirm(`Isso vai substituir o código (chamada) de todas as ${ordem.length} contas por uma sequência 0001, 0002, 0003...\n\nSe você já preencheu uma planilha de lançamentos usando os códigos atuais e ainda não importou, os códigos vão mudar.\n\nContinuar?`)) return;
+
+  mostrarToast('Renumerando contas...');
+  const atualizacoes = ordem.map((c, i) => ({ id: c.id, chamada: String(i + 1).padStart(4, '0') }));
+
+  let erros = 0;
+  for (const u of atualizacoes) {
+    const { error } = await sb.from('plano_contas').update({ chamada: u.chamada }).eq('id', u.id).eq('empresa_id', empresaId);
+    if (error) { erros++; continue; }
+    const c = CONTAS.find(x => x.id === u.id);
+    if (c) c.chamada = u.chamada;
+  }
+  renderizarPlano();
+  mostrarToast(erros ? `Renumerado com ${erros} erro(s).` : `${atualizacoes.length} contas renumeradas (0001 a ${String(atualizacoes.length).padStart(4,'0')}).`);
 }
 
 function atualizarSelects() {
@@ -2895,7 +2929,7 @@ function atualizarSelects() {
     const sel = document.getElementById(sid); if (!sel) return;
     const cur = sel.value; sel.innerHTML = '';
     ['AC', 'ANC', 'PC', 'PNC', 'PL', 'REC', 'DESP'].forEach(g => {
-      const contas = CONTAS.filter(c => c.grupo === g).sort((a, b) => (a.codigo || '').localeCompare(b.codigo || '', undefined, { numeric: true }));
+      const contas = CONTAS.filter(c => c.grupo === g && c.indCta !== 'S').sort((a, b) => (a.codigo || '').localeCompare(b.codigo || '', undefined, { numeric: true }));
       if (!contas.length) return;
       const og = document.createElement('optgroup'); og.label = grpNames[g];
       contas.forEach(c => og.appendChild(new Option(`${c.chamada ? c.chamada + ' — ' : ''}${c.nome}`, c.id)));
@@ -2910,6 +2944,7 @@ async function cadastrarConta() {
   const nome = document.getElementById('pc-nome').value.trim();
   const grupo = document.getElementById('pc-grupo').value;
   const tipo = document.getElementById('pc-tipo').value;
+  const indCta = document.getElementById('pc-indcta')?.value === 'S' ? 'S' : 'A';
   const dre = document.getElementById('pc-dre').value || null;
 
   if (!codigo) { alert('Informe o código da conta.'); return; }
@@ -2920,27 +2955,20 @@ async function cadastrarConta() {
   const id = 'conta_' + codigo.replace(/[-\.]/g, '_') + '_' + Date.now();
   const retif = dre === 'DED';
 
-  let { error } = await sb.from('plano_contas').insert({
+  const { erro } = await _insertContasComFallback([{
     id, empresa_id: empresaId, user_id: currentUser.id,
-    codigo, chamada: chamada || null, nome, grupo, tipo, dre, retif
-  });
-  if (error && error.message.includes('chamada')) {
-    const res = await sb.from('plano_contas').insert({
-      id, empresa_id: empresaId, user_id: currentUser.id,
-      codigo, nome, grupo, tipo, dre, retif
-    });
-    error = res.error;
-  }
-  if (error) { alert('Erro: ' + error.message); return; }
+    codigo, chamada: chamada || null, nome, grupo, tipo, ind_cta: indCta, dre, retif
+  }]);
+  if (erro) { alert('Erro: ' + erro.message); return; }
 
-  CONTAS.push({ id, codigo, chamada, nome, grupo, tipo, dre: dre || undefined, retif });
+  CONTAS.push({ id, codigo, chamada, nome, grupo, tipo, indCta, dre: dre || undefined, retif });
   saldos[id] = 0;
   document.getElementById('pc-codigo').value = '';
   document.getElementById('pc-chamada') && (document.getElementById('pc-chamada').value = '');
   document.getElementById('pc-nome').value = '';
   document.getElementById('pc-dre').value = '';
   renderizarPlano();
-  mostrarToast(`Conta ${chamada || codigo} — ${nome} adicionada.`);
+  mostrarToast(`Conta ${chamada || codigo} — ${nome} adicionada${indCta === 'S' ? ' (sintética)' : ''}.`);
 }
 
 async function deletarConta(id) {
@@ -2975,27 +3003,52 @@ function dropCSV(e) {
 async function processarCSV(text) {
   const linhas = text.trim().split(/\r?\n/);
   const sep = linhas[0].includes(';') ? ';' : ',';
+
+  // Detecta colunas pelo cabeçalho (aceita com ou sem as colunas "chamada" e "ind_cta")
+  const cabecalho = linhas[0].split(sep).map(c => c.trim().toLowerCase().replace(/^"|"$/g, ''));
+  const iCodigo = cabecalho.findIndex(c => c === 'codigo' || c === 'código');
+  const iChamada = cabecalho.findIndex(c => c === 'chamada');
+  const iNome = cabecalho.findIndex(c => c === 'nome');
+  const iGrupo = cabecalho.findIndex(c => c === 'grupo');
+  const iTipo = cabecalho.findIndex(c => c === 'tipo');
+  const iIndCta = cabecalho.findIndex(c => c === 'ind_cta' || c === 'indcta' || c === 's/a' || c === 'classificacao' || c === 'classificação');
+  const iDre = cabecalho.findIndex(c => c === 'dre');
+  const temCabecalhoValido = iCodigo >= 0 && iNome >= 0 && iGrupo >= 0 && iTipo >= 0;
+
+  // Fallback: arquivo antigo sem cabeçalho reconhecível, mantém ordem posicional codigo;nome;grupo;tipo;dre
+  const idx = temCabecalhoValido
+    ? { codigo: iCodigo, chamada: iChamada, nome: iNome, grupo: iGrupo, tipo: iTipo, indCta: iIndCta, dre: iDre }
+    : { codigo: 0, chamada: -1, nome: 1, grupo: 2, tipo: 3, indCta: -1, dre: 4 };
+
   const dados = linhas.slice(1).filter(l => l.trim());
   let adicionadas = 0, erros = [];
   const novas = [];
 
   dados.forEach((linha, i) => {
     const cols = linha.split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
-    const [codigo, nome, grupo, tipo, dre] = cols;
+    const codigo = cols[idx.codigo];
+    const chamada = idx.chamada >= 0 ? (cols[idx.chamada] || '') : '';
+    const nome = cols[idx.nome];
+    const grupo = cols[idx.grupo];
+    const tipo = cols[idx.tipo];
+    const indCtaRaw = idx.indCta >= 0 ? (cols[idx.indCta] || '').trim().toUpperCase() : '';
+    const indCta = (indCtaRaw === 'S' || indCtaRaw === 'A') ? indCtaRaw : 'A';
+    const dre = idx.dre >= 0 ? cols[idx.dre] : '';
     if (!codigo || !nome || !grupo || !tipo) { erros.push(`Linha ${i + 2}: dados incompletos`); return; }
     if (!['AC', 'ANC', 'PC', 'PNC', 'PL', 'REC', 'DESP'].includes(grupo.toUpperCase())) { erros.push(`Linha ${i + 2}: grupo "${grupo}" inválido`); return; }
     if (CONTAS.find(c => c.codigo === codigo)) { erros.push(`Linha ${i + 2}: código ${codigo} já existe`); return; }
+    if (chamada && CONTAS.find(c => c.chamada === chamada)) { erros.push(`Linha ${i + 2}: chamada ${chamada} já existe`); return; }
     const id = 'csv_' + codigo.replace(/\./g, '_') + '_' + Date.now() + '_' + i;
     const g = grupo.toUpperCase(), t = tipo.toUpperCase();
     const d2 = dre ? dre.toUpperCase() : null;
-    novas.push({ id, codigo, nome, grupo: g, tipo: t, dre: d2, retif: d2 === 'DED' });
+    novas.push({ id, codigo, chamada, nome, grupo: g, tipo: t, indCta, dre: d2, retif: d2 === 'DED' });
     adicionadas++;
   });
 
   if (novas.length > 0) {
-    const rows = novas.map(c => ({ id: c.id, empresa_id: empresaId, user_id: currentUser.id, codigo: c.codigo, nome: c.nome, grupo: c.grupo, tipo: c.tipo, dre: c.dre, retif: c.retif }));
-    const { error } = await sb.from('plano_contas').insert(rows);
-    if (error) { alert('Erro ao importar: ' + error.message); return; }
+    const rows = novas.map(c => ({ id: c.id, empresa_id: empresaId, user_id: currentUser.id, codigo: c.codigo, chamada: c.chamada || null, nome: c.nome, grupo: c.grupo, tipo: c.tipo, ind_cta: c.indCta, dre: c.dre, retif: c.retif }));
+    const { erro } = await _insertContasComFallback(rows);
+    if (erro) { alert('Erro ao importar: ' + erro.message); return; }
     novas.forEach(c => { CONTAS.push({ ...c, dre: c.dre || undefined }); saldos[c.id] = 0; });
   }
 
@@ -3026,6 +3079,21 @@ function _parseDataCell(v) {
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) { const [d, m, y] = s.split('/'); return `${y}-${m}-${d}`; }
   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) { const [y, m, d] = s.split('-'); return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`; }
   return null;
+}
+
+// Encontra uma conta por nome, chamada (código 0000) ou código hierárquico.
+// Tolera zeros à esquerda (ex: "1" bate com chamada "0001").
+function _matchConta(texto) {
+  const t = String(texto == null ? '' : texto).trim();
+  if (!t) return undefined;
+  const tNum = /^\d+$/.test(t) ? parseInt(t, 10) : null;
+  return CONTAS.find(c => {
+    if (c.nome && c.nome.toLowerCase() === t.toLowerCase()) return true;
+    if (c.chamada && String(c.chamada) === t) return true;
+    if (c.codigo && String(c.codigo) === t) return true;
+    if (tNum !== null && c.chamada && /^\d+$/.test(String(c.chamada)) && parseInt(c.chamada, 10) === tNum) return true;
+    return false;
+  });
 }
 
 // Converte uma célula de valor (número do Excel ou texto BR "1.234,56") em número
@@ -3095,11 +3163,13 @@ async function importarLancamentosCSV(input) {
     const valor = _parseValorCell(campos[iValor]);
     if (!valor || valor <= 0) { erros.push(`Linha ${i+1}: valor inválido "${campos[iValor]}"`); continue; }
 
-    const contaD = CONTAS.find(c => c.nome.toLowerCase() === debNome.toLowerCase() || String(c.chamada) === debNome || String(c.codigo) === debNome);
-    const contaC = CONTAS.find(c => c.nome.toLowerCase() === credNome.toLowerCase() || String(c.chamada) === credNome || String(c.codigo) === credNome);
+    const contaD = _matchConta(debNome);
+    const contaC = _matchConta(credNome);
 
     if (!contaD) { erros.push(`Linha ${i+1}: conta débito não encontrada "${debNome}"`); continue; }
     if (!contaC) { erros.push(`Linha ${i+1}: conta crédito não encontrada "${credNome}"`); continue; }
+    if (contaD.indCta === 'S') { erros.push(`Linha ${i+1}: conta débito "${contaD.nome}" é sintética (totalizadora) — lance em uma conta analítica`); continue; }
+    if (contaC.indCta === 'S') { erros.push(`Linha ${i+1}: conta crédito "${contaC.nome}" é sintética (totalizadora) — lance em uma conta analítica`); continue; }
     if (contaD.id === contaC.id) { erros.push(`Linha ${i+1}: débito e crédito iguais`); continue; }
 
     registros.push({ data, contaD, contaC, desc, valor });
@@ -3167,26 +3237,60 @@ function baixarModeloLancamentos() {
 }
 
 function baixarModeloCSV() {
-  const modelo = `codigo;nome;grupo;tipo;dre\n1.1.01;Caixa e Equivalentes;AC;D;\n1.1.02;Clientes;AC;D;\n1.2.01;Imobilizado;ANC;D;\n2.1.01;Fornecedores;PC;C;\n3.1.01;Capital Social;PL;C;\n4.1.01;Receita de Vendas;REC;C;ROB\n5.1.01;CMV / CPV;DESP;D;CMV`;
+  const modelo = `codigo;chamada;nome;grupo;tipo;ind_cta;dre\n1-1;0001;Ativo Circulante;AC;D;S;\n1-1-01;0002;Caixa e Equivalentes;AC;D;A;\n2-1;0003;Passivo Circulante;PC;C;S;\n2-1-01;0004;Fornecedores;PC;C;A;\n2-3;0005;Patrimônio Líquido;PL;C;S;\n2-3-01;0006;Capital Social;PL;C;A;\n3-1;0007;Receita de Vendas;REC;C;A;ROB\n4-1;0008;CMV / CPV;DESP;D;A;CMV`;
   const blob = new Blob([modelo], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
   a.download = 'modelo_plano_contas.csv'; a.click();
 }
 
 async function restaurarPadrao() {
-  if (!confirm('Restaurar plano padrão? Contas personalizadas sem lançamentos serão removidas.')) return;
-  const idsOriginais = CONTAS_PADRAO.map(c => c.id);
-  for (let i = CONTAS.length - 1; i >= 0; i--) {
-    const c = CONTAS[i];
-    const ehOriginal = idsOriginais.includes(c.id);
+  // BUG CORRIGIDO (set/2026): antes comparava c.id com CONTAS_PADRAO.map(c=>c.id), que é sempre
+  // undefined (CONTAS_PADRAO nunca tem campo id) — isso fazia TODA conta sem lançamento ser apagada,
+  // mesmo sendo uma conta personalizada legítima. Agora compara pelo código hierárquico (codigo).
+  const codigosOriginais = new Set(CONTAS_PADRAO.map(c => c.codigo));
+  const paraRemover = CONTAS.filter(c => {
+    const ehOriginal = codigosOriginais.has(c.codigo);
     const temLanc = historico.some(h => h.debitoId === c.id || h.creditoId === c.id);
-    if (!ehOriginal && !temLanc) {
-      await sb.from('plano_contas').delete().eq('id', c.id).eq('empresa_id', empresaId);
-      delete saldos[c.id]; CONTAS.splice(i, 1);
+    return !ehOriginal && !temLanc;
+  });
+
+  if (paraRemover.length === 0) {
+    if (!confirm('Nenhuma conta será removida (todas são do padrão ou já têm lançamentos).\n\nDeseja apenas garantir que as contas padrão que faltam sejam adicionadas?')) return;
+  } else {
+    const lista = paraRemover.slice(0, 15).map(c => `• ${c.chamada || c.codigo || '—'} — ${c.nome}`).join('\n');
+    const aviso = `ATENÇÃO: isso vai APAGAR PERMANENTEMENTE ${paraRemover.length} conta(s) que não fazem parte do plano padrão e não têm lançamentos:\n\n${lista}${paraRemover.length > 15 ? `\n... e mais ${paraRemover.length - 15}` : ''}\n\nEssa ação NÃO pode ser desfeita.`;
+    alert(aviso);
+    const digitado = prompt('Para confirmar a exclusão dessas contas, digite EXCLUIR (em maiúsculas):');
+    if (digitado !== 'EXCLUIR') { mostrarToast('Operação cancelada — nada foi apagado.'); return; }
+
+    for (const c of paraRemover) {
+      const { error } = await sb.from('plano_contas').delete().eq('id', c.id).eq('empresa_id', empresaId);
+      if (!error) { delete saldos[c.id]; const idx = CONTAS.indexOf(c); if (idx >= 0) CONTAS.splice(idx, 1); }
     }
   }
+
+  // Adiciona contas padrão que ainda não existem (por código), sem duplicar
+  const existentes = new Set(CONTAS.map(c => c.codigo));
+  const faltando = CONTAS_PADRAO.filter(c => !existentes.has(c.codigo));
+  let qtdAdicionada = 0;
+  if (faltando.length) {
+    const idsGerados = faltando.map((c, i) => gerarIdConta(c.slug, 'restaura_' + i));
+    const rows = faltando.map((c, i) => ({
+      id: idsGerados[i], empresa_id: empresaId, user_id: currentUser.id,
+      codigo: c.codigo, chamada: String(c.chamada), nome: c.nome, grupo: c.grupo, tipo: c.tipo,
+      ind_cta: c.indCta || 'A', dre: c.dre || null, retif: c.retif || false
+    }));
+    const { inseridos, erro } = await _insertContasComFallback(rows);
+    if (erro) { alert('Erro ao restaurar contas padrão: ' + erro.message + `\n\n${inseridos.length} de ${rows.length} contas foram adicionadas antes do erro.`); }
+    inseridos.forEach(r => {
+      CONTAS.push({ id: r.id, codigo: r.codigo, chamada: r.chamada || '', nome: r.nome, grupo: r.grupo, tipo: r.tipo, indCta: r.ind_cta || 'A', dre: r.dre || undefined, retif: r.retif || false });
+      saldos[r.id] = 0;
+    });
+    qtdAdicionada = inseridos.length;
+  }
+
   renderizarPlano(); renderizarTudo();
-  mostrarToast('Plano padrão restaurado.');
+  mostrarToast(`Plano padrão restaurado. ${paraRemover.length} removida(s), ${qtdAdicionada} adicionada(s).`);
 }
 
 // ── TOAST ──

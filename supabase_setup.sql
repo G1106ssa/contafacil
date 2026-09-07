@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS public.plano_contas (
   nome       text NOT NULL,
   grupo      text NOT NULL CHECK (grupo IN ('AC','ANC','PC','PNC','PL','REC','DESP')),
   tipo       text NOT NULL CHECK (tipo IN ('D','C','C_RETIF','D_RETIF')),
+  ind_cta    text CHECK (ind_cta IN ('S','A')), -- S=Sintética (totalizadora) / A=Analítica (recebe lançamento)
   dre        text,
   retif      boolean DEFAULT false,
   created_at timestamptz DEFAULT now(),
