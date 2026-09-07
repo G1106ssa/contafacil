@@ -381,6 +381,8 @@ select option{background:var(--card2);}
 .plano-table tr.conta-nivel-1 td{font-weight:700;background:var(--header-bg);}
 .plano-table tr.conta-nivel-2 td:nth-child(2),.plano-table tr.conta-nivel-3 td:nth-child(2){color:var(--muted);}
 .plano-table tr.conta-sintetica td{font-style:italic;opacity:0.82;}
+.cod-classificacao{font-family:monospace;font-size:11px;color:var(--muted);cursor:pointer;padding:2px 5px;border-radius:3px;transition:background .15s,color .15s;}
+.cod-classificacao:hover{background:var(--accent-bg);color:var(--accent);}
 .ind-cta-badge{display:inline-block;font-size:9px;font-weight:700;width:16px;height:16px;line-height:16px;text-align:center;border-radius:50%;transition:transform 0.15s;}
 .ind-cta-badge.ind-cta-s{background:rgba(148,148,148,0.20);color:var(--muted);}
 .ind-cta-badge.ind-cta-a{background:rgba(64,144,224,0.16);color:var(--accent);}
@@ -1101,7 +1103,7 @@ select option{background:var(--card2);}
           <div class="plano-stats" id="plano-stats"></div>
           <div style="overflow-x:auto;">
             <table class="plano-table">
-              <thead><tr><th>Chamada</th><th>Nome</th><th>Grupo</th><th>Tipo</th><th>S/A</th><th>DRE</th><th></th></tr></thead>
+              <thead><tr><th>Chamada</th><th>Nome</th><th>Classificação</th><th>Grupo</th><th>Tipo</th><th>S/A</th><th>DRE</th><th></th></tr></thead>
               <tbody id="plano-tbody"></tbody>
             </table>
           </div>
@@ -2829,6 +2831,13 @@ async function salvarDadosEmpresa() {
   mostrarToast('Dados da empresa salvos.');
 }
 
+function copiarClassificacao(codigo) {
+  if (!codigo) return;
+  navigator.clipboard?.writeText(codigo).then(() => {
+    mostrarToast(`Código "${codigo}" copiado.`);
+  }).catch(() => {});
+}
+
 function renderizarPlano() {
   const tbody = document.getElementById('plano-tbody');
   const sorted = [...CONTAS].sort((a, b) => {
@@ -2841,7 +2850,7 @@ function renderizarPlano() {
   sorted.forEach(c => {
     const categoria = GRP_CATEGORIA[c.grupo] || '—';
     if (categoria !== categoriaAnterior) {
-      linhas.push(`<tr class="plano-categoria-row"><td colspan="7"><span class="plano-categoria-label">${categoria}</span></td></tr>`);
+      linhas.push(`<tr class="plano-categoria-row"><td colspan="8"><span class="plano-categoria-label">${categoria}</span></td></tr>`);
       categoriaAnterior = categoria;
     }
     const nivel = (c.codigo || '').split('-').length;
@@ -2856,6 +2865,7 @@ function renderizarPlano() {
     linhas.push(`<tr class="${rowClass}${sintetica ? ' conta-sintetica' : ''}">
       <td><span class="cod-conta cod-chamada-edit" onclick="editarChamada('${c.id}')" title="Clique para editar o código">${c.chamada || '—'}</span></td>
       <td style="padding-left:${indent}px">${c.nome}</td>
+      <td><span class="cod-classificacao" onclick="copiarClassificacao('${(c.codigo || '').replace(/'/g, "\\'")}')" title="Clique para copiar">${c.codigo || '—'}</span></td>
       <td><span class="grupo-badge ${GRP_COLORS[c.grupo]}">${GRP_LABELS[c.grupo]}</span></td>
       <td><span style="font-size:11px;color:var(--muted);">${c.tipo}</span></td>
       <td>${indCtaTag}</td>
