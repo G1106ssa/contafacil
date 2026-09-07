@@ -1945,6 +1945,30 @@ function calcResultado(sp) {
   return rob - ded - desp + recFin + orec;
 }
 
+// ══════════════════════════════════════════════════
+// HIERARQUIA DE CONTAS (Sintética ↔ Analítica)
+// ══════════════════════════════════════════════════
+// Uma conta Sintética nunca recebe lançamento direto — ela existe para agrupar/totalizar as
+// contas Analíticas "filhas" (mesma lógica de código-pai/código-filho da Classificação).
+// Aceita tanto o padrão novo (traços: 1-1-1-01) quanto o legado Multiverse (pontos: 5.1.01).
+function _segmentosCodigo(codigo) {
+  return String(codigo || '').split(/[-.]/).filter(s => s !== '');
+}
+function _ehDescendente(codigo, codigoPai) {
+  const segs = _segmentosCodigo(codigo), pai = _segmentosCodigo(codigoPai);
+  if (!pai.length || segs.length <= pai.length) return false;
+  return pai.every((s, i) => segs[i] === s);
+}
+// Saldo "de exibição" de uma conta: para Analítica é o saldo direto (sp[id]); para Sintética
+// é a soma do saldo de todas as Analíticas descendentes — é para isso que serve uma sintética.
+function saldoExibicao(conta, sp) {
+  const ss = sp || saldos;
+  if (!conta) return 0;
+  if (conta.indCta !== 'S') return ss[conta.id] || 0;
+  return CONTAS.filter(c => c.indCta !== 'S' && _ehDescendente(c.codigo, conta.codigo))
+    .reduce((s, c) => s + (ss[c.id] || 0), 0);
+}
+
 function balancoTrimestre(t) {
   const anoInp = document.getElementById('bp-ano');
   let ano = parseInt(anoInp?.value, 10);
@@ -1966,7 +1990,7 @@ function renderizarBalanco(fD, fC) {
     const el = document.getElementById('contas-' + g); el.innerHTML = '';
     gp[g].forEach(c => {
       const div = document.createElement('div'); div.className = 'conta-item'; div.id = 'conta-' + c.id;
-      div.innerHTML = `<span class="conta-nome">${c.nome}</span><span class="conta-valor">${fmt(sp[c.id])}</span>`;
+      div.innerHTML = `<span class="conta-nome"${c.indCta === 'S' ? ' style="font-weight:600;"' : ''}>${c.nome}</span><span class="conta-valor">${fmt(saldoExibicao(c, sp))}</span>`;
       el.appendChild(div);
     });
   });
@@ -1978,7 +2002,7 @@ function renderizarBalanco(fD, fC) {
   const elPL = document.getElementById('contas-pl'); elPL.innerHTML = '';
   gp['pl'].forEach(c => {
     const div = document.createElement('div'); div.className = 'conta-item'; div.id = 'conta-' + c.id;
-    div.innerHTML = `<span class="conta-nome">${c.nome}</span><span class="conta-valor">${fmt(sp[c.id])}</span>`;
+    div.innerHTML = `<span class="conta-nome"${c.indCta === 'S' ? ' style="font-weight:600;"' : ''}>${c.nome}</span><span class="conta-valor">${fmt(saldoExibicao(c, sp))}</span>`;
     elPL.appendChild(div);
   });
   if (Math.abs(res) > 0.005) {
@@ -2386,6 +2410,56 @@ function renderizarRazao() {
   </div>`;
 
   contasFiltradas.forEach(c => {
+    if (c.indCta === 'S') {
+      const descendentes = CONTAS.filter(x => x.indCta !== 'S' && _ehDescendente(x.codigo, c.codigo));
+      if (!descendentes.length) return;
+      let saldoAnteriorTot = 0, totalDebTot = 0, totalCredTot = 0, saldoAtualTot = 0;
+      const linhasContas = descendentes.map(fc => {
+        const movsF = movPorConta[fc.id] || [];
+        const isDevF = (fc.tipo === 'D' || fc.tipo === 'C_RETIF');
+        let movsAntF = [], movsPerF = movsF;
+        if (dtIni) { movsAntF = movsF.filter(m => m.data < dtIni && !m.estornado && !m.tipoEstorno); movsPerF = movsF.filter(m => !m.data || m.data >= dtIni); }
+        if (dtFim) movsPerF = movsPerF.filter(m => !m.data || m.data <= dtFim);
+        let saldoAntF = 0;
+        movsAntF.forEach(m => { saldoAntF += m.valor * ((m._lado === 'D') === isDevF ? 1 : -1); });
+        let debF = 0, credF = 0, saldoF = saldoAntF;
+        movsPerF.forEach(m => {
+          if (m.estornado || m.tipoEstorno) return;
+          if (m._lado === 'D') debF += m.valor; else credF += m.valor;
+          saldoF += m.valor * ((m._lado === 'D') === isDevF ? 1 : -1);
+        });
+        saldoAnteriorTot += saldoAntF; totalDebTot += debF; totalCredTot += credF; saldoAtualTot += saldoF;
+        if (Math.abs(saldoAntF) < 0.005 && debF < 0.005 && credF < 0.005) return '';
+        return `<tr>
+          <td class="rz-td-hist">${fc.chamada ? fc.chamada + ' — ' : ''}${fc.nome}</td>
+          <td class="rz-td-deb">${debF > 0 ? fmt(debF) : '<span class="rz-empty-val">—</span>'}</td>
+          <td class="rz-td-cred">${credF > 0 ? fmt(credF) : '<span class="rz-empty-val">—</span>'}</td>
+          <td class="rz-td-saldo">${fmt(saldoF)}</td>
+        </tr>`;
+      }).join('');
+      if (!linhasContas.replace(/\s/g, '')) return;
+      html += `<div class="razao-section">
+        <div class="razao-section-header grupo-${c.grupo}">
+          <span class="rz-conta-cod">${c.chamada || c.codigo || '—'}</span>
+          <span class="rz-conta-nome">${c.nome} <span style="opacity:.6;font-weight:400;">(sintética — saldo consolidado das analíticas)</span></span>
+          <span class="rz-saldo-final">${fmt(saldoAtualTot)}</span>
+        </div>
+        <table class="rz-table">
+          <thead><tr>
+            <th>Conta Analítica</th>
+            <th class="rz-th-val" style="width:100px">Débito</th>
+            <th class="rz-th-val" style="width:100px">Crédito</th>
+            <th class="rz-th-val" style="width:110px">Saldo</th>
+          </tr></thead>
+          <tbody>
+            <tr class="rz-saldo-ant"><td colspan="3">Saldo Anterior (consolidado)</td><td class="rz-td-saldo">${fmt(saldoAnteriorTot)}</td></tr>
+            ${linhasContas}
+            <tr class="rz-total"><td>Totais Consolidados</td><td class="rz-td-deb">${totalDebTot > 0 ? fmt(totalDebTot) : '—'}</td><td class="rz-td-cred">${totalCredTot > 0 ? fmt(totalCredTot) : '—'}</td><td class="rz-td-saldo">${fmt(saldoAtualTot)}</td></tr>
+          </tbody>
+        </table>
+      </div>`;
+      return;
+    }
     const movs = movPorConta[c.id] || [];
     const isDevedor = (c.tipo === 'D' || c.tipo === 'C_RETIF');
 
@@ -2511,6 +2585,16 @@ function renderizarBalancete() {
     }
   });
 
+  // Conta Sintética não recebe lançamento direto: seu saldo de exibição é a soma das
+  // contas Analíticas descendentes (é para isso que serve uma conta sintética).
+  const calcC = (c) => {
+    const mm = movPorConta[c.id];
+    const isDD = (c.tipo === 'D' || c.tipo === 'C_RETIF');
+    const sAnt = isDD ? (mm.debAnt - mm.credAnt) : (mm.credAnt - mm.debAnt);
+    const sAtual = sAnt + (isDD ? (mm.debitos - mm.creditos) : (mm.creditos - mm.debitos));
+    return { saldoAnt: sAnt, saldoAtual: sAtual, debitos: mm.debitos, creditos: mm.creditos };
+  };
+
   const fmtV = (v) => v > 0.005 ? `<span class="bal-${v > 0 ? 'deb' : 'deb'}">${fmt(v)}</span>` : '<span class="bt-val-zero">0,00</span>';
   const fmtCell = (v) => Math.abs(v) > 0.005 ? fmt(Math.abs(v)) : '<span class="bt-val-zero">0,00</span>';
 
@@ -2541,17 +2625,33 @@ function renderizarBalancete() {
       const saldoAnt = isD ? (m.debAnt - m.credAnt) : (m.credAnt - m.debAnt);
       const saldoAtual = saldoAnt + (isD ? (m.debitos - m.creditos) : (m.creditos - m.debitos));
 
+      // Totais do grupo usam sempre o valor BRUTO da própria conta: sintéticas nunca recebem
+      // lançamento direto (contribuem 0 aqui), o saldo real já está nas analíticas filhas —
+      // somar os dois lados evita dupla contagem no total do grupo.
       grpSaldoAnt += saldoAnt; grpDeb += m.debitos; grpCred += m.creditos; grpSaldoAtual += saldoAtual;
 
-      if (Math.abs(saldoAnt) < 0.005 && m.debitos < 0.005 && m.creditos < 0.005) return '';
+      // Exibição da linha: conta Sintética mostra o total consolidado das Analíticas
+      // descendentes (via código/classificação), não seu próprio saldo bruto (sempre 0).
+      let dispSaldoAnt = saldoAnt, dispDeb = m.debitos, dispCred = m.creditos, dispSaldoAtual = saldoAtual;
+      if (c.indCta === 'S') {
+        const agg = CONTAS.filter(x => x.indCta !== 'S' && _ehDescendente(x.codigo, c.codigo))
+          .reduce((acc, d) => {
+            const v = calcC(d);
+            acc.saldoAnt += v.saldoAnt; acc.saldoAtual += v.saldoAtual; acc.debitos += v.debitos; acc.creditos += v.creditos;
+            return acc;
+          }, { saldoAnt: 0, saldoAtual: 0, debitos: 0, creditos: 0 });
+        dispSaldoAnt = agg.saldoAnt; dispDeb = agg.debitos; dispCred = agg.creditos; dispSaldoAtual = agg.saldoAtual;
+      }
+
+      if (Math.abs(dispSaldoAnt) < 0.005 && dispDeb < 0.005 && dispCred < 0.005) return '';
 
       return `<tr class="bt-row-conta">
-        <td class="bt-desc">${c.nome}</td>
+        <td class="bt-desc"${c.indCta === 'S' ? ' style="font-weight:600;"' : ''}>${c.nome}${c.indCta === 'S' ? ' <span style="opacity:.55;font-weight:400;">(sintética)</span>' : ''}</td>
         <td class="bt-cod">${c.chamada || c.codigo || '—'}</td>
-        <td class="bt-val">${fmtCell(saldoAnt)}</td>
-        <td class="bt-val">${m.debitos > 0.005 ? fmt(m.debitos) : '<span class="bt-val-zero">0,00</span>'}</td>
-        <td class="bt-val">${m.creditos > 0.005 ? fmt(m.creditos) : '<span class="bt-val-zero">0,00</span>'}</td>
-        <td class="bt-val">${fmtCell(saldoAtual)}</td>
+        <td class="bt-val">${fmtCell(dispSaldoAnt)}</td>
+        <td class="bt-val">${dispDeb > 0.005 ? fmt(dispDeb) : '<span class="bt-val-zero">0,00</span>'}</td>
+        <td class="bt-val">${dispCred > 0.005 ? fmt(dispCred) : '<span class="bt-val-zero">0,00</span>'}</td>
+        <td class="bt-val">${fmtCell(dispSaldoAtual)}</td>
       </tr>`;
     }).join('');
 
