@@ -746,9 +746,11 @@ select option{background:var(--card2);}
                 <label>Data Final</label>
                 <input type="date" id="razao-dt-fim">
               </div>
-              <div class="input-group" style="min-width:160px;">
+              <div class="input-group" style="min-width:220px;">
                 <label>Conta</label>
-                <select id="razao-conta-sel" onchange="renderizarRazao()">
+                <input type="text" id="razao-conta-busca" list="razao-contas-datalist" placeholder="🔍 Buscar por nome, chamada ou código..." oninput="_razaoBuscaSelecionar()" autocomplete="off">
+                <datalist id="razao-contas-datalist"></datalist>
+                <select id="razao-conta-sel" onchange="renderizarRazao()" style="display:none">
                   <option value="todas">— Todas as contas —</option>
                 </select>
               </div>
@@ -1101,6 +1103,9 @@ select option{background:var(--card2);}
             <button class="btn-sm" onclick="renumerarChamadas()" title="Atribui um código sequencial de 4 dígitos (0001, 0002...) a todas as contas, na ordem da tabela">🔢 Renumerar Chamada (0000)</button>
           </div>
           <div class="plano-stats" id="plano-stats"></div>
+          <div class="input-group" style="max-width:380px;margin:0 0 12px;">
+            <input type="text" id="plano-busca" placeholder="🔍 Buscar por nome, chamada ou código..." oninput="renderizarPlano()" autocomplete="off">
+          </div>
           <div style="overflow-x:auto;">
             <table class="plano-table">
               <thead><tr><th>Chamada</th><th>Nome</th><th>Classificação</th><th>Grupo</th><th>Tipo</th><th>S/A</th><th>DRE</th><th></th></tr></thead>
@@ -2279,6 +2284,7 @@ function filtrarRazao(g) {
   document.querySelectorAll('.btn-filtro').forEach(b => b.classList.remove('active'));
   document.getElementById('filtro-' + g).classList.add('active');
   document.getElementById('razao-conta-sel').value = 'todas';
+  document.getElementById('razao-conta-busca').value = '';
   renderizarRazao();
 }
 
@@ -2289,6 +2295,7 @@ function limparFiltrosRazao() {
   document.getElementById('razao-dt-ini').value = '';
   document.getElementById('razao-dt-fim').value = '';
   document.getElementById('razao-conta-sel').value = 'todas';
+  document.getElementById('razao-conta-busca').value = '';
   renderizarRazao();
 }
 
@@ -2297,15 +2304,38 @@ function atualizarSelectRazao() {
   if (!sel) return;
   const cur = sel.value;
   sel.innerHTML = '<option value="todas">— Todas as contas —</option>';
+  const dl = document.getElementById('razao-contas-datalist');
+  if (dl) dl.innerHTML = '';
   const grpNames = { AC:'Ativo Circulante', ANC:'Ativo Não Circulante', PC:'Passivo Circulante', PNC:'Passivo Não Circulante', PL:'Patrimônio Líquido', REC:'Receitas', DESP:'Despesas' };
   ['AC','ANC','PC','PNC','PL','REC','DESP'].forEach(g => {
     const contas = CONTAS.filter(c => c.grupo === g).sort((a,b) => (a.codigo||'').localeCompare(b.codigo||'', undefined, {numeric:true}));
     if (!contas.length) return;
     const og = document.createElement('optgroup'); og.label = grpNames[g];
-    contas.forEach(c => og.appendChild(new Option(`${c.chamada ? c.chamada+' — ':''}${c.nome}`, c.id)));
+    contas.forEach(c => {
+      const label = `${c.chamada ? c.chamada+' — ':''}${c.nome}`;
+      og.appendChild(new Option(label, c.id));
+      if (dl) dl.appendChild(new Option(label));
+    });
     sel.appendChild(og);
   });
   if (cur) sel.value = cur;
+  // mantém o texto exibido no campo de busca coerente com a seleção atual (ex: após reabrir a tela)
+  const busca = document.getElementById('razao-conta-busca');
+  if (busca) {
+    const optSel = Array.from(sel.options).find(o => o.value === sel.value);
+    busca.value = (sel.value === 'todas' || !optSel) ? '' : optSel.textContent;
+  }
+}
+
+// Interpreta o texto digitado/escolhido no campo de busca da Razão e seleciona a conta correspondente
+function _razaoBuscaSelecionar() {
+  const input = document.getElementById('razao-conta-busca');
+  const sel = document.getElementById('razao-conta-sel');
+  const texto = input.value.trim();
+  if (!texto) { sel.value = 'todas'; renderizarRazao(); return; }
+  const opt = Array.from(sel.options).find(o => o.textContent === texto);
+  if (opt) { sel.value = opt.value; renderizarRazao(); }
+  // se ainda não bateu com nenhuma sugestão exata, espera o usuário terminar de digitar/escolher
 }
 
 function renderizarRazao() {
@@ -2831,6 +2861,11 @@ async function salvarDadosEmpresa() {
   mostrarToast('Dados da empresa salvos.');
 }
 
+// Normaliza texto pra busca: minúsculas e sem acento (ex: "Serviços" -> "servicos")
+function _normalizarBusca(s) {
+  return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+}
+
 function copiarClassificacao(codigo) {
   if (!codigo) return;
   navigator.clipboard?.writeText(codigo).then(() => {
@@ -2845,9 +2880,14 @@ function renderizarPlano() {
     if (og !== 0) return og;
     return (a.codigo || '').localeCompare(b.codigo || '', undefined, { numeric: true });
   });
+  const buscaEl = document.getElementById('plano-busca');
+  const busca = buscaEl ? _normalizarBusca(buscaEl.value) : '';
+  const filtradas = busca
+    ? sorted.filter(c => _normalizarBusca(`${c.nome} ${c.chamada || ''} ${c.codigo || ''}`).includes(busca))
+    : sorted;
   let categoriaAnterior = null;
   const linhas = [];
-  sorted.forEach(c => {
+  filtradas.forEach(c => {
     const categoria = GRP_CATEGORIA[c.grupo] || '—';
     if (categoria !== categoriaAnterior) {
       linhas.push(`<tr class="plano-categoria-row"><td colspan="8"><span class="plano-categoria-label">${categoria}</span></td></tr>`);
@@ -2873,7 +2913,7 @@ function renderizarPlano() {
       <td>${canDel ? `<button class="btn-del-conta" onclick="deletarConta('${c.id}')" title="Remover">✕</button>` : ''}</td>
     </tr>`);
   });
-  tbody.innerHTML = linhas.join('');
+  tbody.innerHTML = linhas.length ? linhas.join('') : `<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--muted);">Nenhuma conta encontrada${busca ? ` para "${buscaEl.value}"` : ''}.</td></tr>`;
   const stats = [
     { label: 'Total', val: CONTAS.length },
     { label: 'Ativo', val: CONTAS.filter(c => c.grupo === 'AC' || c.grupo === 'ANC').length },
