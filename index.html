@@ -251,6 +251,8 @@ select option{background:var(--card2);}
 .conta-valor{font-weight:600;font-variant-numeric:tabular-nums;color:var(--text);white-space:nowrap;flex-shrink:0;}
 .conta-item.flash-up{background:rgba(76,216,144,0.12);}
 .conta-item.flash-down{background:rgba(224,88,88,0.12);}
+.conta-item.conta-sintetica-bp{background:var(--subtle-bg);}
+.conta-item.conta-sintetica-bp .conta-nome{color:var(--text2);}
 .total-row{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;font-size:12px;font-weight:700;border-top:1px solid var(--border);gap:8px;}
 .total-row span:last-child{white-space:nowrap;flex-shrink:0;}
 .total-row.ativo{color:var(--blue);}
@@ -2000,6 +2002,45 @@ function saldoExibicao(conta, sp) {
     .reduce((s, c) => s + (ss[c.id] || 0), 0);
 }
 
+// Saldo consolidado de uma sintética para o Balanço, RESTRITO às contas do mesmo grupo do BP
+// (impede que uma sintética "guarda-chuva" — ex.: código "2" = Passivo + PL — puxe saldo de
+// outro grupo pra dentro da coluna errada).
+function _saldoConsBP(conta, contasDoGrupo, sp) {
+  const ss = sp || saldos;
+  if (conta.indCta !== 'S') return ss[conta.id] || 0;
+  return contasDoGrupo
+    .filter(c => c.indCta !== 'S' && _ehDescendente(c.codigo, conta.codigo))
+    .reduce((s, c) => s + (ss[c.id] || 0), 0);
+}
+
+// Renderiza as contas de um grupo do Balanço em hierarquia: sintéticas aparecem como
+// subtotais (negrito, fundo suave) e as analíticas indentadas abaixo. Linhas com saldo
+// zero são omitidas. O TOTAL do grupo (no cabeçalho) considera só analíticas — a sintética
+// é lida como resumo do grupo, nunca somada de novo, então nada é contado em dobro.
+function _renderContasBP(el, contas, sp) {
+  if (!el) return;
+  el.innerHTML = '';
+  const visiveis = contas
+    .filter(c => Math.abs(_saldoConsBP(c, contas, sp)) > 0.005)
+    .sort((a, b) => (a.codigo || '').localeCompare(b.codigo || '', undefined, { numeric: true }));
+  if (!visiveis.length) {
+    el.innerHTML = '<div class="conta-item bp-placeholder" style="opacity:.5;"><span class="conta-nome">Sem saldo</span><span class="conta-valor">R$ 0,00</span></div>';
+    return;
+  }
+  const minNivel = Math.min(...visiveis.map(c => _segmentosCodigo(c.codigo).length || 1));
+  visiveis.forEach(c => {
+    const nivel = _segmentosCodigo(c.codigo).length || 1;
+    const pad = Math.max(0, nivel - minNivel) * 14;
+    const sint = c.indCta === 'S';
+    const div = document.createElement('div');
+    div.className = 'conta-item' + (sint ? ' conta-sintetica-bp' : '');
+    div.id = 'conta-' + c.id;
+    div.innerHTML = `<span class="conta-nome" style="padding-left:${pad}px;${sint ? 'font-weight:600;' : ''}">${c.nome}</span>`
+      + `<span class="conta-valor"${sint ? ' style="font-weight:700;"' : ''}>${fmt(_saldoConsBP(c, contas, sp))}</span>`;
+    el.appendChild(div);
+  });
+}
+
 function balancoTrimestre(t) {
   const anoInp = document.getElementById('bp-ano');
   let ano = parseInt(anoInp?.value, 10);
@@ -2015,31 +2056,20 @@ function renderizarBalanco(fD, fC) {
   const sp = dtFim ? calcSaldosPeriodo(null, dtFim) : saldos;
   const sumP = (grupo) => CONTAS.filter(c => c.grupo === grupo).reduce((s, c) => s + sp[c.id], 0);
 
-  // Só contas analíticas nas linhas do BP: sintéticas mostrariam o total consolidado dos
-  // filhos e, aparecendo lado a lado, fariam a soma das linhas não "bater" com o TOTAL
-  // (que considera apenas analíticas). A visão consolidada por sintética fica no Balancete.
+  // Linhas do BP em hierarquia (sintéticas como subtotal + analíticas indentadas).
   const gp = { ac: [], anc: [], pc: [], pnc: [], pl: [] };
-  CONTAS.filter(c => GRUPOS_BP.includes(c.grupo) && c.indCta !== 'S').forEach(c => gp[GRUPOS[c.grupo]].push(c));
-  ['ac', 'anc', 'pc', 'pnc'].forEach(g => {
-    const el = document.getElementById('contas-' + g); el.innerHTML = '';
-    gp[g].forEach(c => {
-      const div = document.createElement('div'); div.className = 'conta-item'; div.id = 'conta-' + c.id;
-      div.innerHTML = `<span class="conta-nome"${c.indCta === 'S' ? ' style="font-weight:600;"' : ''}>${c.nome}</span><span class="conta-valor">${fmt(saldoExibicao(c, sp))}</span>`;
-      el.appendChild(div);
-    });
-  });
+  CONTAS.filter(c => GRUPOS_BP.includes(c.grupo)).forEach(c => gp[GRUPOS[c.grupo]].push(c));
+  ['ac', 'anc', 'pc', 'pnc'].forEach(g => _renderContasBP(document.getElementById('contas-' + g), gp[g], sp));
 
   const totAC = sumP('AC'), totANC = sumP('ANC'), totPC = sumP('PC'), totPNC = sumP('PNC'), totPL = sumP('PL');
   const res = calcResultado(sp), plR = totPL + res;
 
-  // Renderiza o PL com a linha virtual do Resultado do Exercício (encerramento automático)
-  const elPL = document.getElementById('contas-pl'); elPL.innerHTML = '';
-  gp['pl'].forEach(c => {
-    const div = document.createElement('div'); div.className = 'conta-item'; div.id = 'conta-' + c.id;
-    div.innerHTML = `<span class="conta-nome"${c.indCta === 'S' ? ' style="font-weight:600;"' : ''}>${c.nome}</span><span class="conta-valor">${fmt(saldoExibicao(c, sp))}</span>`;
-    elPL.appendChild(div);
-  });
+  // Renderiza o PL + a linha virtual do Resultado do Exercício (encerramento automático)
+  const elPL = document.getElementById('contas-pl');
+  _renderContasBP(elPL, gp['pl'], sp);
   if (Math.abs(res) > 0.005) {
+    const phPL = elPL.querySelector('.bp-placeholder');
+    if (phPL) phPL.remove();
     const corRes = res >= 0 ? 'var(--green)' : 'var(--red)';
     const labelRes = res >= 0 ? 'Resultado do Exercício (Lucro)' : 'Resultado do Exercício (Prejuízo)';
     const divRes = document.createElement('div');
