@@ -816,6 +816,28 @@ select option{background:var(--card2);}
       <div class="livro-sub active" id="livro-diario">
         <div class="card">
           <div class="card-header">Livro Diário</div>
+          <div class="razao-toolbar">
+            <div class="razao-toolbar-row">
+              <div class="input-group" style="min-width:130px;">
+                <label>Data Inicial</label>
+                <input type="date" id="diario-dt-ini">
+              </div>
+              <div class="input-group" style="min-width:130px;">
+                <label>Data Final</label>
+                <input type="date" id="diario-dt-fim">
+              </div>
+              <div class="input-group" style="min-width:230px;">
+                <label>Conta</label>
+                <select id="diario-conta" onchange="renderizarDiario()">
+                  <option value="">— Todas as contas —</option>
+                </select>
+              </div>
+              <div style="display:flex;gap:4px;align-self:flex-end;margin-bottom:1px;">
+                <button class="btn-gravar" style="padding:0 14px;font-size:11px;height:32px;line-height:32px;" onclick="renderizarDiario()"><i class="ti ti-search" style="font-size:13px;vertical-align:-1px;"></i> Buscar</button>
+                <button class="btn-sm" style="height:32px;padding:0 10px;" onclick="limparFiltrosDiario()">Limpar</button>
+              </div>
+            </div>
+          </div>
           <div id="diario-content"><div class="vazio">Nenhum lançamento registrado.</div></div>
         </div>
       </div>
@@ -1299,6 +1321,25 @@ select option{background:var(--card2);}
   </div>
 </div>
 
+<!-- Modal de entrada de texto (substitui o prompt() nativo do navegador) -->
+<div class="modal-overlay" id="modal-prompt" style="display:none;" onclick="if(event.target===event.currentTarget)_promptResolve(null)">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header" id="modal-prompt-header">
+      <div class="modal-title"><i class="ti ti-pencil" id="modal-prompt-icon"></i> <span id="modal-prompt-titulo">Informe</span></div>
+      <button class="modal-close" onclick="_promptResolve(null)">✕</button>
+    </div>
+    <div class="modal-body" style="padding:18px;">
+      <p id="modal-prompt-msg" style="margin:0 0 10px;font-size:12.5px;color:var(--text2);line-height:1.6;white-space:pre-line;"></p>
+      <input type="text" id="modal-prompt-input" autocomplete="off" spellcheck="false">
+      <p id="modal-prompt-erro" style="color:var(--red);font-size:11px;margin:6px 0 0;display:none;"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancelar" onclick="_promptResolve(null)">Cancelar</button>
+      <button class="btn-gravar" id="modal-prompt-ok" onclick="_promptOk()">OK</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════
 // SUPABASE CONFIG
@@ -1548,7 +1589,7 @@ async function trocarEmpresa(id) {
 }
 
 async function abrirNovaEmpresa() {
-  const nome = prompt('Nome da nova empresa:');
+  const nome = await pedirTexto('Nova empresa', 'Nome da nova empresa', { placeholder: 'Razão social', textoOk: 'Criar' });
   if (!nome || !nome.trim()) return;
   showLoading('Criando empresa...');
   let { data, error } = await sb.from('empresas').insert({ user_id: currentUser.id, nome: nome.trim(), meta: {} }).select('id, nome, cnpj, regime, meta').single();
@@ -2623,23 +2664,87 @@ function renderizarHistorico() {
 // ══════════════════════════════════════════════════
 // DIÁRIO
 // ══════════════════════════════════════════════════
+function limparFiltrosDiario() {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('diario-dt-ini', ''); set('diario-dt-fim', ''); set('diario-conta', '');
+  renderizarDiario();
+}
+
+// Preenche o <select> de conta do Diário (analíticas + sintéticas), agrupado.
+function popularSelectDiario() {
+  const sel = document.getElementById('diario-conta');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— Todas as contas —</option>';
+  const grpNames = { AC:'Ativo Circulante', ANC:'Ativo Não Circulante', PC:'Passivo Circulante', PNC:'Passivo Não Circulante', PL:'Patrimônio Líquido', REC:'Receitas', DESP:'Despesas' };
+  ['AC','ANC','PC','PNC','PL','REC','DESP'].forEach(g => {
+    const contas = CONTAS.filter(c => c.grupo === g).sort((a, b) => (a.codigo || '').localeCompare(b.codigo || '', undefined, { numeric: true }));
+    if (!contas.length) return;
+    const og = document.createElement('optgroup'); og.label = grpNames[g];
+    contas.forEach(c => og.appendChild(new Option(`${c.chamada ? c.chamada + ' — ' : ''}${c.nome}${c.indCta === 'S' ? '  (sintética)' : ''}`, c.id)));
+    sel.appendChild(og);
+  });
+  if (cur) sel.value = cur;
+}
+
 function renderizarDiario() {
   const el = document.getElementById('diario-content');
-  const ord = [...historico].reverse();
+  const ord = [...historico].reverse(); // cronológico
   if (!ord.length) { el.innerHTML = '<div class="vazio">Nenhum lançamento registrado.</div>'; return; }
-  const porData = {}; let n = 0;
-  ord.forEach(h => { const d = h.data || '0000-00-00'; if (!porData[d]) porData[d] = []; if (!h.estornado && !h.tipoEstorno) n++; porData[d].push({ ...h, _num: h.tipoEstorno ? '↩' : (h.estornado ? '—' : n) }); });
+
+  // Numeração global estável (não muda com o filtro)
+  const numMap = new Map(); let n = 0;
+  ord.forEach(h => { numMap.set(h, h.tipoEstorno ? '↩' : (h.estornado ? '—' : (++n))); });
+
+  const dtIni = document.getElementById('diario-dt-ini')?.value || '';
+  const dtFim = document.getElementById('diario-dt-fim')?.value || '';
+  const contaSel = document.getElementById('diario-conta')?.value || '';
+
+  let idsAlvo = null, nomeAlvo = '';
+  if (contaSel) {
+    const c = CONTAS.find(x => x.id === contaSel);
+    if (c) {
+      nomeAlvo = `${c.chamada ? c.chamada + ' — ' : ''}${c.nome}`;
+      idsAlvo = new Set([c.id]);
+      if (c.indCta === 'S') CONTAS.filter(x => x.indCta !== 'S' && _ehDescendente(x.codigo, c.codigo)).forEach(x => idsAlvo.add(x.id));
+    }
+  }
+
+  const filtrado = ord.filter(h => {
+    if (dtIni && (h.data || '') < dtIni) return false;
+    if (dtFim && (h.data || '') > dtFim) return false;
+    if (idsAlvo && !idsAlvo.has(h.debitoId) && !idsAlvo.has(h.creditoId)) return false;
+    return true;
+  });
+
+  const temFiltro = dtIni || dtFim || contaSel;
+  if (!filtrado.length) {
+    el.innerHTML = `<div class="vazio">Nenhum lançamento ${temFiltro ? 'com esses filtros' : 'registrado'}.</div>`;
+    return;
+  }
+
+  const ativos = filtrado.filter(h => !h.estornado && !h.tipoEstorno);
+  const totalPeriodo = ativos.reduce((s, h) => s + h.valor, 0);
+
+  const porData = {};
+  filtrado.forEach(h => { const d = h.data || '0000-00-00'; (porData[d] = porData[d] || []).push(h); });
+
   const blocos = Object.keys(porData).sort().map(data => `
     <tr><td colspan="4" style="padding:8px 10px 3px;border-bottom:none;">
       <span style="display:inline-block;background:var(--accent-bg);border:1px solid var(--border);color:var(--accent);font-size:10px;font-weight:600;padding:2px 8px;border-radius:3px;">${fmtData(data)}</span>
     </td></tr>
     ${porData[data].map(h => `<tr class="${h.estornado ? 'estornado-row' : ''}${h.tipoEstorno ? 'estorno-row' : ''}">
-      <td><span class="d-num">${h._num}</span></td>
+      <td><span class="d-num">${numMap.get(h)}</span></td>
       <td><div class="d-debito-line">D — ${h.debito}</div><div class="d-credito-line">C — ${h.credito}</div><div style="color:var(--muted);font-size:11px;margin-top:1px;">${h.desc}</div></td>
       <td class="d-valor deb">${fmt(h.valor)}</td>
       <td class="d-valor cred">${fmt(h.valor)}</td>
     </tr>`).join('')}`).join('');
-  el.innerHTML = `<div style="overflow-x:auto;"><table class="diario-table"><thead><tr><th>#</th><th>Histórico</th><th style="text-align:right;color:var(--red)">Débito</th><th style="text-align:right;color:var(--green)">Crédito</th></tr></thead><tbody>${blocos}</tbody></table></div>`;
+
+  const cab = temFiltro
+    ? `<div class="bal-header" style="margin-bottom:12px;text-align:left;"><b>Livro Diário</b>${dtIni ? ' — de ' + fmtData(dtIni) : ''}${dtFim ? ' até ' + fmtData(dtFim) : ''}${nomeAlvo ? ' — conta: ' + nomeAlvo : ''}<br>${ativos.length} lançamento(s) &nbsp;·&nbsp; total ${fmt(totalPeriodo)}</div>`
+    : '';
+
+  el.innerHTML = cab + `<div style="overflow-x:auto;"><table class="diario-table"><thead><tr><th>#</th><th>Histórico</th><th style="text-align:right;color:var(--red)">Débito</th><th style="text-align:right;color:var(--green)">Crédito</th></tr></thead><tbody>${blocos}</tbody></table></div>`;
 }
 
 // ══════════════════════════════════════════════════
@@ -2691,6 +2796,7 @@ function atualizarSelectRazao() {
     const optSel = Array.from(sel.options).find(o => o.value === sel.value);
     busca.value = (sel.value === 'todas' || !optSel) ? '' : optSel.textContent;
   }
+  popularSelectDiario();
 }
 
 // Interpreta o texto digitado/escolhido no campo de busca da Razão e seleciona a conta correspondente
@@ -3157,7 +3263,7 @@ function renderizarListaEmpresas() {
 async function renomearEmpresa(id) {
   const emp = empresas.find(e => e.id === id);
   if (!emp) return;
-  const novo = prompt('Novo nome para a empresa:', emp.nome);
+  const novo = await pedirTexto('Renomear empresa', 'Novo nome para a empresa', { valorInicial: emp.nome, textoOk: 'Salvar' });
   if (!novo || !novo.trim() || novo.trim() === emp.nome) return;
   const { error } = await sb.from('empresas').update({ nome: novo.trim() }).eq('id', id);
   if (error) { alert('Erro ao renomear: ' + (error.message || JSON.stringify(error))); return; }
@@ -3270,9 +3376,56 @@ function confirmarAcao(mensagem, opts = {}) {
   });
 }
 document.addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape' || !_confirmModalResolver) return;
-  const overlay = document.getElementById('modal-confirm-generic');
-  if (overlay && overlay.style.display === 'flex') _confirmModalResolve(false);
+  if (e.key !== 'Escape') return;
+  if (_confirmModalResolver && document.getElementById('modal-confirm-generic').style.display === 'flex') _confirmModalResolve(false);
+  if (_promptResolver && document.getElementById('modal-prompt').style.display === 'flex') _promptResolve(null);
+});
+
+// ══════════════════════════════════════════════════
+// MODAL DE ENTRADA DE TEXTO (substitui window.prompt)
+// ══════════════════════════════════════════════════
+let _promptResolver = null, _promptConfirmar = null;
+function _promptResolve(v) {
+  document.getElementById('modal-prompt').style.display = 'none';
+  if (_promptResolver) { const r = _promptResolver; _promptResolver = null; _promptConfirmar = null; r(v); }
+}
+function _promptOk() {
+  const val = document.getElementById('modal-prompt-input').value;
+  if (_promptConfirmar && val.trim() !== _promptConfirmar) {
+    const e = document.getElementById('modal-prompt-erro');
+    e.textContent = `Digite exatamente "${_promptConfirmar}" para prosseguir.`;
+    e.style.display = 'block';
+    return;
+  }
+  _promptResolve(val);
+}
+// pedirTexto(titulo, mensagem, { valorInicial, placeholder, textoOk, perigo, confirmar }) -> Promise<string|null>
+// confirmar: exige digitar exatamente esse texto (ex.: "EXCLUIR"). null = cancelou.
+function pedirTexto(titulo, mensagem, opts = {}) {
+  return new Promise(resolve => {
+    _promptResolver = resolve;
+    _promptConfirmar = opts.confirmar || null;
+    document.getElementById('modal-prompt-titulo').textContent = titulo || 'Informe';
+    const msg = document.getElementById('modal-prompt-msg');
+    msg.textContent = mensagem || '';
+    msg.style.display = mensagem ? 'block' : 'none';
+    const inp = document.getElementById('modal-prompt-input');
+    inp.value = opts.valorInicial || '';
+    inp.placeholder = opts.placeholder || '';
+    inp.style.cssText = opts.confirmar ? 'text-align:center;font-weight:600;letter-spacing:1px;' : '';
+    document.getElementById('modal-prompt-erro').style.display = 'none';
+    const hdr = document.getElementById('modal-prompt-header');
+    const ok = document.getElementById('modal-prompt-ok');
+    const ic = document.getElementById('modal-prompt-icon');
+    if (opts.perigo) { hdr.style.background = 'var(--red)'; hdr.style.color = '#fff'; ok.style.background = 'var(--red)'; ic.className = 'ti ti-alert-triangle'; }
+    else { hdr.style.background = ''; hdr.style.color = ''; ok.style.background = ''; ic.className = 'ti ti-pencil'; }
+    ok.textContent = opts.textoOk || 'OK';
+    document.getElementById('modal-prompt').style.display = 'flex';
+    setTimeout(() => { inp.focus(); inp.select(); }, 60);
+  });
+}
+document.getElementById('modal-prompt-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); _promptOk(); }
 });
 
 async function buscarCEP() {
@@ -3421,7 +3574,7 @@ async function editarChamada(id) {
   const c = CONTAS.find(x => x.id === id);
   if (!c) return;
   const atual = c.chamada || '';
-  const novoRaw = prompt(`Código rápido de "${c.nome}"\n(estrutura 0000, ex: 0001)`, atual);
+  const novoRaw = await pedirTexto('Código da conta', `Código rápido de "${c.nome}" — formato 0000 (ex.: 0001). Deixe em branco para remover.`, { valorInicial: atual, placeholder: '0001', textoOk: 'Salvar' });
   if (novoRaw === null) return; // cancelou
   const novo = novoRaw.trim() === '' ? null : _formatarChamada(novoRaw);
   if (novoRaw.trim() !== '' && !novo) { alert('Código inválido. Use apenas números, ex: 1 ou 0001.'); return; }
@@ -3683,9 +3836,8 @@ async function apagarTodosLancamentos() {
   const n = historico.filter(h => !h.tipoEstorno).length;
   if (!n) { alert('Não há lançamentos para apagar nesta empresa.'); return; }
   const emp = (empresas.find(e => e.id === empresaId) || {}).nome || 'empresa atual';
-  alert(`ATENÇÃO: isso vai APAGAR PERMANENTEMENTE os ${n} lançamentos de "${emp}".\n\nExporte um backup antes (aba Lançamentos › Exportar). Esta ação NÃO pode ser desfeita.`);
-  const d = prompt('Para confirmar, digite APAGAR TUDO (em maiúsculas):');
-  if (d !== 'APAGAR TUDO') { mostrarToast('Cancelado — nada foi apagado.'); return; }
+  const d = await pedirTexto('Apagar todos os lançamentos', `Isto remove os ${n} lançamentos de "${emp}" em definitivo — não dá pra desfazer. Exporte um backup antes (Lançamentos › Exportar).\n\nDigite APAGAR TUDO para confirmar.`, { perigo: true, confirmar: 'APAGAR TUDO', placeholder: 'APAGAR TUDO', textoOk: 'Apagar tudo' });
+  if (d === null) { mostrarToast('Cancelado — nada foi apagado.'); return; }
   showLoading('Apagando lançamentos...');
   const { error } = await sb.from('lancamentos').delete().eq('empresa_id', empresaId);
   if (error) { hideLoading(); alert('Erro ao apagar: ' + (error.message || JSON.stringify(error))); return; }
@@ -3706,9 +3858,8 @@ async function limparPlanoContas() {
     return;
   }
   const emp = (empresas.find(e => e.id === empresaId) || {}).nome || 'empresa atual';
-  alert(`Isso vai APAGAR as ${CONTAS.length} contas do plano de "${emp}".\n\nExporte um backup antes (botão "Exportar plano"). Depois importe o plano novo pelo CSV.`);
-  const d = prompt('Para confirmar, digite LIMPAR (em maiúsculas):');
-  if (d !== 'LIMPAR') { mostrarToast('Cancelado.'); return; }
+  const d = await pedirTexto('Limpar plano de contas', `Isto apaga as ${CONTAS.length} contas do plano de "${emp}". Exporte um backup antes ("Exportar plano") e importe o plano novo depois.\n\nDigite LIMPAR para confirmar.`, { perigo: true, confirmar: 'LIMPAR', placeholder: 'LIMPAR', textoOk: 'Limpar plano' });
+  if (d === null) { mostrarToast('Cancelado.'); return; }
   showLoading('Limpando plano de contas...');
   const { error } = await sb.from('plano_contas').delete().eq('empresa_id', empresaId);
   if (error) { hideLoading(); alert('Erro: ' + (error.message || JSON.stringify(error))); return; }
@@ -3916,11 +4067,10 @@ async function restaurarPadrao() {
   if (paraRemover.length === 0) {
     if (!(await confirmarAcao('Nenhuma conta será removida (todas são do padrão ou já têm lançamentos).\n\nDeseja apenas garantir que as contas padrão que faltam sejam adicionadas?', { titulo: 'Restaurar padrão', textoOk: 'Adicionar faltantes' }))) return;
   } else {
-    const lista = paraRemover.slice(0, 15).map(c => `• ${c.chamada || c.codigo || '—'} — ${c.nome}`).join('\n');
-    const aviso = `ATENÇÃO: isso vai APAGAR PERMANENTEMENTE ${paraRemover.length} conta(s) que não fazem parte do plano padrão e não têm lançamentos:\n\n${lista}${paraRemover.length > 15 ? `\n... e mais ${paraRemover.length - 15}` : ''}\n\nEssa ação NÃO pode ser desfeita.`;
-    alert(aviso);
-    const digitado = prompt('Para confirmar a exclusão dessas contas, digite EXCLUIR (em maiúsculas):');
-    if (digitado !== 'EXCLUIR') { mostrarToast('Operação cancelada — nada foi apagado.'); return; }
+    const lista = paraRemover.slice(0, 12).map(c => `• ${c.chamada || c.codigo || '—'} — ${c.nome}`).join('\n');
+    const aviso = `Isto apaga ${paraRemover.length} conta(s) que não são do plano padrão e não têm lançamentos (não dá pra desfazer):\n\n${lista}${paraRemover.length > 12 ? `\n... e mais ${paraRemover.length - 12}` : ''}\n\nDigite EXCLUIR para confirmar.`;
+    const digitado = await pedirTexto('Restaurar plano padrão', aviso, { perigo: true, confirmar: 'EXCLUIR', placeholder: 'EXCLUIR', textoOk: 'Excluir e restaurar' });
+    if (digitado === null) { mostrarToast('Operação cancelada — nada foi apagado.'); return; }
 
     for (const c of paraRemover) {
       const { error } = await sb.from('plano_contas').delete().eq('id', c.id).eq('empresa_id', empresaId);
