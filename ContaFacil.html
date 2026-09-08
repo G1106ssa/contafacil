@@ -368,12 +368,24 @@ select option{background:var(--card2);}
 .diario-table tr:hover td{background:var(--hover-row);}
 .diario-table tr.estornado-row td{opacity:0.35;}
 .diario-table tr.estorno-row td{background:rgba(224,88,88,0.03);}
-.d-num{color:var(--accent);font-weight:700;font-size:11px;}
+.d-num{color:var(--accent);font-weight:700;font-size:11px;padding-top:8px;}
 .d-debito-line{color:var(--red);}
 .d-credito-line{color:var(--green);padding-left:16px;font-style:italic;}
 .d-valor{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;white-space:nowrap;}
 .d-valor.deb{color:var(--red);}
 .d-valor.cred{color:var(--green);}
+/* Diário — layout clássico D / a C com valor na coluna certa */
+.diario-table td.d-conta{border-bottom:none;}
+.diario-table td.d-deb{color:var(--red);padding-top:8px;}
+.diario-table td.d-cred{color:var(--green);font-style:italic;padding-left:24px;}
+.diario-table tr.diario-l td{border-bottom:none;}
+.diario-table tr.diario-hist td{color:var(--muted);font-size:11px;padding:1px 10px 9px 24px;border-bottom:1px solid var(--subtle-border);}
+.diario-table tr.diario-l .d-valor{padding-top:8px;}
+.diario-table tr.diario-datarow td{padding:11px 10px 3px;border-bottom:none;}
+.diario-data{display:inline-block;background:var(--accent-bg);border:1px solid var(--border);color:var(--accent);font-size:10px;font-weight:600;padding:2px 8px;border-radius:3px;}
+.diario-table tr.diario-est td{opacity:0.4;text-decoration:line-through;}
+.diario-table tr.diario-estref td{background:rgba(224,88,88,0.04);}
+.diario-table tfoot tr.diario-tot td{font-weight:700;border-top:2px solid var(--border);padding:9px 10px;background:var(--surface2);}
 
 /* ── RAZÃO ── */
 .razao-toolbar{margin-bottom:14px;display:flex;flex-direction:column;gap:10px;}
@@ -616,12 +628,15 @@ select option{background:var(--card2);}
   .dre-val.prej { color: #a11 !important; }
 
   /* Diário */
-  .d-debito-line { color: #a11 !important; }
-  .d-credito-line { color: #0a6e2a !important; }
+  .d-debito-line, .diario-table td.d-deb { color: #a11 !important; }
+  .d-credito-line, .diario-table td.d-cred { color: #0a6e2a !important; }
   .d-valor.deb { color: #a11 !important; }
   .d-valor.cred { color: #0a6e2a !important; }
-  .diario-table tr.estornado-row td { opacity: 0.4 !important; }
-  .diario-table tr.estorno-row td { background: #fde8e8 !important; }
+  .diario-table tr.diario-l td, .diario-table tr.diario-hist td { border-bottom: none !important; }
+  .diario-table tr.diario-hist td { border-bottom: 1px solid #ddd !important; color: #555 !important; }
+  .diario-table tfoot tr.diario-tot td { background: #e8e8e8 !important; font-weight: 700 !important; border-top: 2px solid #999 !important; }
+  .diario-table tr.diario-est td { opacity: 0.45 !important; }
+  .diario-table tr.diario-estref td { background: #fde8e8 !important; }
 
   /* Misc */
   .badge-estornado { background: #fdd !important; color: #a11 !important; border: 1px solid #daa !important; }
@@ -2689,12 +2704,7 @@ function popularSelectDiario() {
 
 function renderizarDiario() {
   const el = document.getElementById('diario-content');
-  const ord = [...historico].reverse(); // cronológico
-  if (!ord.length) { el.innerHTML = '<div class="vazio">Nenhum lançamento registrado.</div>'; return; }
-
-  // Numeração global estável (não muda com o filtro)
-  const numMap = new Map(); let n = 0;
-  ord.forEach(h => { numMap.set(h, h.tipoEstorno ? '↩' : (h.estornado ? '—' : (++n))); });
+  if (!historico.length) { el.innerHTML = '<div class="vazio">Nenhum lançamento registrado.</div>'; return; }
 
   const dtIni = document.getElementById('diario-dt-ini')?.value || '';
   const dtFim = document.getElementById('diario-dt-fim')?.value || '';
@@ -2710,7 +2720,12 @@ function renderizarDiario() {
     }
   }
 
-  const filtrado = ord.filter(h => {
+  // O Diário é cronológico: ordena por DATA (empates mantêm a ordem de digitação) e
+  // numera 1..N seguindo essa ordem — a numeração acompanha a página, não o cadastro.
+  const cron = [...historico].reverse();
+  cron.sort((a, b) => (a.data || '') < (b.data || '') ? -1 : (a.data || '') > (b.data || '') ? 1 : 0);
+
+  const filtrado = cron.filter(h => {
     if (dtIni && (h.data || '') < dtIni) return false;
     if (dtFim && (h.data || '') > dtFim) return false;
     if (idsAlvo && !idsAlvo.has(h.debitoId) && !idsAlvo.has(h.creditoId)) return false;
@@ -2723,28 +2738,41 @@ function renderizarDiario() {
     return;
   }
 
-  const ativos = filtrado.filter(h => !h.estornado && !h.tipoEstorno);
-  const totalPeriodo = ativos.reduce((s, h) => s + h.valor, 0);
+  let n = 0, totDeb = 0, totCred = 0, ultimaData = null;
+  const linhas = filtrado.map(h => {
+    const est = h.estornado === true, estRef = h.tipoEstorno === true;
+    const num = estRef ? '↩' : (est ? '—' : (++n));
+    if (!est && !estRef) { totDeb += h.valor; totCred += h.valor; }
+    const cls = est ? 'diario-est' : (estRef ? 'diario-estref' : '');
+    let cab = '';
+    if (h.data !== ultimaData) {
+      ultimaData = h.data;
+      cab = `<tr class="diario-datarow"><td colspan="4"><span class="diario-data">${fmtData(h.data)}</span></td></tr>`;
+    }
+    return cab + `
+      <tr class="diario-l ${cls}">
+        <td class="d-num" rowspan="3">${num}</td>
+        <td class="d-conta d-deb">${h.debito}</td>
+        <td class="d-valor deb">${fmt(h.valor)}</td>
+        <td></td>
+      </tr>
+      <tr class="diario-l ${cls}">
+        <td class="d-conta d-cred">a ${h.credito}</td>
+        <td></td>
+        <td class="d-valor cred">${fmt(h.valor)}</td>
+      </tr>
+      <tr class="diario-hist ${cls}"><td colspan="3">${h.desc}</td></tr>`;
+  }).join('');
 
-  const porData = {};
-  filtrado.forEach(h => { const d = h.data || '0000-00-00'; (porData[d] = porData[d] || []).push(h); });
-
-  const blocos = Object.keys(porData).sort().map(data => `
-    <tr><td colspan="4" style="padding:8px 10px 3px;border-bottom:none;">
-      <span style="display:inline-block;background:var(--accent-bg);border:1px solid var(--border);color:var(--accent);font-size:10px;font-weight:600;padding:2px 8px;border-radius:3px;">${fmtData(data)}</span>
-    </td></tr>
-    ${porData[data].map(h => `<tr class="${h.estornado ? 'estornado-row' : ''}${h.tipoEstorno ? 'estorno-row' : ''}">
-      <td><span class="d-num">${numMap.get(h)}</span></td>
-      <td><div class="d-debito-line">D — ${h.debito}</div><div class="d-credito-line">C — ${h.credito}</div><div style="color:var(--muted);font-size:11px;margin-top:1px;">${h.desc}</div></td>
-      <td class="d-valor deb">${fmt(h.valor)}</td>
-      <td class="d-valor cred">${fmt(h.valor)}</td>
-    </tr>`).join('')}`).join('');
-
-  const cab = temFiltro
-    ? `<div class="bal-header" style="margin-bottom:12px;text-align:left;"><b>Livro Diário</b>${dtIni ? ' — de ' + fmtData(dtIni) : ''}${dtFim ? ' até ' + fmtData(dtFim) : ''}${nomeAlvo ? ' — conta: ' + nomeAlvo : ''}<br>${ativos.length} lançamento(s) &nbsp;·&nbsp; total ${fmt(totalPeriodo)}</div>`
+  const cabResumo = temFiltro
+    ? `<div class="bal-header" style="margin-bottom:12px;text-align:left;"><b>Livro Diário</b>${dtIni ? ' — de ' + fmtData(dtIni) : ''}${dtFim ? ' até ' + fmtData(dtFim) : ''}${nomeAlvo ? ' — conta: ' + nomeAlvo : ''}<br>${n} lançamento(s) no período</div>`
     : '';
 
-  el.innerHTML = cab + `<div style="overflow-x:auto;"><table class="diario-table"><thead><tr><th>#</th><th>Histórico</th><th style="text-align:right;color:var(--red)">Débito</th><th style="text-align:right;color:var(--green)">Crédito</th></tr></thead><tbody>${blocos}</tbody></table></div>`;
+  el.innerHTML = cabResumo + `<div style="overflow-x:auto;"><table class="diario-table">
+    <thead><tr><th style="width:44px">Nº</th><th>Conta / Histórico</th><th style="text-align:right;color:var(--red);width:130px">Débito</th><th style="text-align:right;color:var(--green);width:130px">Crédito</th></tr></thead>
+    <tbody>${linhas}</tbody>
+    <tfoot><tr class="diario-tot"><td></td><td>Totais${temFiltro ? ' do período' : ''}</td><td class="d-valor deb">${fmt(totDeb)}</td><td class="d-valor cred">${fmt(totCred)}</td></tr></tfoot>
+  </table></div>`;
 }
 
 // ══════════════════════════════════════════════════
