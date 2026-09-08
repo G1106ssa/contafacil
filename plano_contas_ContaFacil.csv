@@ -1,0 +1,156 @@
+﻿codigo;chamada;nome;grupo;tipo;ind_cta;dre
+1;0001;ATIVO;AC;D;S;
+1-1;0002;ATIVO CIRCULANTE;AC;D;S;
+1-1-1;0003;DISPONIBILIDADES;AC;D;S;
+1-1-1-01;0004;Caixa e Equivalentes de Caixa;AC;D;S;
+1-1-1-01-0001;0005;Caixa Geral;AC;D;A;
+1-1-1-01-0002;0006;Banco Conta Movimento;AC;D;A;
+1-1-1-01-0003;0007;Aplicacoes de Liquidez Imediata;AC;D;A;
+1-1-2;0008;CLIENTES E CONTAS A RECEBER;AC;D;S;
+1-1-2-01;0009;Clientes no Pais;AC;D;S;
+1-1-2-01-0001;0010;Servicos a Receber;AC;D;A;
+1-1-3;0011;TRIBUTOS A RECUPERAR / COMPENSAR;AC;D;S;
+1-1-3-01;0012;Impostos Retidos na Fonte;AC;D;S;
+1-1-3-01-0001;0013;IRRF a Compensar;AC;D;A;
+1-1-3-01-0002;0014;CSLL Retida na Fonte a Compensar;AC;D;A;
+1-1-3-01-0003;0015;PIS Retido a Compensar;AC;D;A;
+1-1-3-01-0004;0016;COFINS Retida a Compensar;AC;D;A;
+1-1-3-01-0005;0017;ISS Retido a Compensar;AC;D;A;
+1-1-3-01-0006;0018;INSS Retido a Compensar;AC;D;A;
+1-1-4;0077;ESTOQUES;AC;D;S;
+1-1-4-01;0078;Mercadorias e Insumos;AC;D;S;
+1-1-4-01-0001;0079;Mercadorias para Revenda;AC;D;A;
+1-1-4-01-0002;0080;Materiais e Insumos;AC;D;A;
+1-1-5;0081;APLICACOES FINANCEIRAS;AC;D;S;
+1-1-5-01;0082;Aplicacoes de Curto Prazo;AC;D;S;
+1-1-5-01-0001;0083;Aplicacoes Financeiras de Curto Prazo;AC;D;A;
+1-1-6;0084;ADIANTAMENTOS;AC;D;S;
+1-1-6-01;0085;Adiantamentos Concedidos;AC;D;S;
+1-1-6-01-0001;0086;Adiantamentos a Fornecedores;AC;D;A;
+1-1-6-01-0002;0087;Adiantamentos a Empregados;AC;D;A;
+1-2;0088;ATIVO NAO CIRCULANTE;ANC;D;S;
+1-2-1;0089;IMOBILIZADO;ANC;D;S;
+1-2-1-01;0090;Bens em Operacao;ANC;D;S;
+1-2-1-01-0001;0091;Moveis e Utensilios;ANC;D;A;
+1-2-1-01-0002;0092;Equipamentos de Informatica;ANC;D;A;
+1-2-1-01-0003;0093;Maquinas e Equipamentos;ANC;D;A;
+1-2-1-01-0004;0094;Veiculos;ANC;D;A;
+1-2-1-02;0095;Depreciacao Acumulada;ANC;C_RETIF;S;
+1-2-1-02-0001;0096;(-) Depreciacao Acumulada;ANC;C_RETIF;A;
+1-2-2;0097;INTANGIVEL;ANC;D;S;
+1-2-2-01;0098;Ativos Intangiveis;ANC;D;S;
+1-2-2-01-0001;0099;Softwares e Licencas de Uso;ANC;D;A;
+1-2-2-02;0100;Amortizacao Acumulada;ANC;C_RETIF;S;
+1-2-2-02-0001;0101;(-) Amortizacao Acumulada;ANC;C_RETIF;A;
+1-2-3;0102;INVESTIMENTOS;ANC;D;S;
+1-2-3-01;0103;Participacoes Societarias;ANC;D;S;
+1-2-3-01-0001;0104;Participacoes em Coligadas e Controladas (MEP);ANC;D;A;
+2;0019;PASSIVO E PATRIMONIO LIQUIDO;PC;C;S;
+2-1;0020;PASSIVO CIRCULANTE;PC;C;S;
+2-1-1;0021;FORNECEDORES;PC;C;S;
+2-1-1-01;0022;Fornecedores Nacionais;PC;C;S;
+2-1-1-01-0001;0023;Fornecedores de Servicos a Pagar;PC;C;A;
+2-1-2;0024;OBRIGACOES TRABALHISTAS E PREVIDENCIARIAS;PC;C;S;
+2-1-2-01;0025;Folha de Pagamento e Encargos;PC;C;S;
+2-1-2-01-0001;0026;Salarios e Ordenados a Pagar;PC;C;A;
+2-1-2-01-0002;0027;INSS a Recolher;PC;C;A;
+2-1-2-01-0003;0028;FGTS a Recolher;PC;C;A;
+2-1-2-01-0004;0029;Provisao de Ferias e Encargos;PC;C;A;
+2-1-2-01-0005;0030;Provisao de 13o Salario e Encargos;PC;C;A;
+2-1-3;0031;OBRIGACOES FISCAIS;PC;C;S;
+2-1-3-01;0032;Impostos e Contribuicoes a Recolher;PC;C;S;
+2-1-3-01-0001;0033;Simples Nacional a Recolher;PC;C;A;
+2-1-3-01-0002;0034;ISS a Recolher;PC;C;A;
+2-1-3-01-0003;0035;PIS a Recolher;PC;C;A;
+2-1-3-01-0004;0036;COFINS a Recolher;PC;C;A;
+2-1-3-01-0005;0037;IRPJ a Recolher;PC;C;A;
+2-1-3-01-0006;0038;CSLL a Recolher;PC;C;A;
+2-1-4;0105;EMPRESTIMOS E FINANCIAMENTOS;PC;C;S;
+2-1-4-01;0106;Instituicoes Financeiras;PC;C;S;
+2-1-4-01-0001;0107;Emprestimos Bancarios a Pagar (CP);PC;C;A;
+2-1-4-01-0002;0108;Financiamentos a Pagar (CP);PC;C;A;
+2-1-5;0109;OUTRAS OBRIGACOES;PC;C;S;
+2-1-5-01;0110;Contas a Pagar Diversas;PC;C;S;
+2-1-5-01-0001;0111;Adiantamentos de Clientes;PC;C;A;
+2-1-5-01-0002;0112;Contas a Pagar - Diversos;PC;C;A;
+2-2;0113;PASSIVO NAO CIRCULANTE;PNC;C;S;
+2-2-1;0114;EMPRESTIMOS E FINANCIAMENTOS LP;PNC;C;S;
+2-2-1-01;0115;Instituicoes Financeiras LP;PNC;C;S;
+2-2-1-01-0001;0116;Financiamentos a Pagar (LP);PNC;C;A;
+2-2-1-01-0002;0117;Emprestimos a Pagar (LP);PNC;C;A;
+2-2-2;0118;PARCELAMENTOS DE TRIBUTOS;PNC;C;S;
+2-2-2-01;0119;Parcelamentos;PNC;C;S;
+2-2-2-01-0001;0120;Parcelamentos de Tributos (LP);PNC;C;A;
+2-3;0039;PATRIMONIO LIQUIDO;PL;C;S;
+2-3-1;0040;CAPITAL SOCIAL;PL;C;S;
+2-3-1-01;0041;Capital Subscrito e Integralizado;PL;C;S;
+2-3-1-01-0001;0042;Capital Social Integralizado;PL;C;A;
+2-3-2;0121;RESERVAS E LUCROS ACUMULADOS;PL;C;S;
+2-3-2-01;0122;Lucros ou Prejuizos Acumulados;PL;C;S;
+2-3-2-01-0001;0123;Lucros Acumulados;PL;C;A;
+2-3-2-01-0002;0124;(-) Prejuizos Acumulados;PL;D_RETIF;A;
+3;0043;RECEITAS;REC;C;S;
+3-1;0044;RECEITA OPERACIONAL BRUTA;REC;C;S;ROB
+3-1-1;0045;RECEITA DE PRESTACAO DE SERVICOS;REC;C;S;ROB
+3-1-1-01;0046;Servicos Prestados no Mercado Interno;REC;C;S;ROB
+3-1-1-01-0001;0047;Receita de Assessoria e Consultoria;REC;C;A;ROB
+3-1-1-01-0002;0048;Receita de Servicos em Geral;REC;C;A;ROB
+3-1-2;0125;RECEITA DE VENDA DE MERCADORIAS;REC;C;S;ROB
+3-1-2-01;0126;Vendas no Mercado Interno;REC;C;S;ROB
+3-1-2-01-0001;0127;Venda de Mercadorias;REC;C;A;ROB
+3-2;0049;DEDUCOES DA RECEITA BRUTA;REC;D;S;DED
+3-2-1;0050;TRIBUTOS INCIDENTES SOBRE O FATURAMENTO;REC;D;S;DED
+3-2-1-01;0051;Impostos e Contribuicoes;REC;D;S;DED
+3-2-1-01-0001;0052;Simples Nacional sobre Faturamento;REC;D;A;DED
+3-2-1-01-0002;0053;ISS sobre Faturamento;REC;D;A;DED
+3-2-1-01-0003;0054;PIS sobre Faturamento;REC;D;A;DED
+3-2-1-01-0004;0055;COFINS sobre Faturamento;REC;D;A;DED
+3-2-1-01-0005;0128;ICMS sobre Faturamento;REC;D;A;DED
+3-3;0129;RECEITAS FINANCEIRAS;REC;C;S;
+3-3-1;0130;Receitas Financeiras;REC;C;S;RFIN
+3-3-1-01;0131;Rendimentos e Juros Ativos;REC;C;S;RFIN
+3-3-1-01-0001;0132;Rendimentos de Aplicacoes Financeiras;REC;C;A;RFIN
+3-3-1-01-0002;0133;Juros Ativos e Descontos Obtidos;REC;C;A;RFIN
+3-4;0134;OUTRAS RECEITAS OPERACIONAIS;REC;C;S;
+3-4-1;0135;Outras Receitas Operacionais;REC;C;S;OREC
+3-4-1-01;0136;Outras Receitas;REC;C;S;OREC
+3-4-1-01-0001;0137;Receitas Diversas;REC;C;A;OREC
+3-4-1-01-0002;0138;Ganhos na Alienacao de Imobilizado;REC;C;A;OREC
+4;0056;CUSTOS E DESPESAS;DESP;D;S;
+4-1;0057;CUSTO DOS SERVICOS PRESTADOS (CSP);DESP;D;S;CMV
+4-1-1;0058;CUSTOS DIRETOS DA OPERACAO;DESP;D;S;CMV
+4-1-1-01;0059;Pessoal Operacional (Ligado ao Servico);DESP;D;S;CMV
+4-1-1-01-0001;0060;Salarios e Encargos - Equipe Operacional;DESP;D;A;CMV
+4-1-1-02;0061;Terceiros e Subcontratacoes;DESP;D;S;CMV
+4-1-1-02-0001;0062;Servicos Prestados por PJ (Subcontratacao);DESP;D;A;CMV
+4-1-1-03;0063;Infraestrutura de Servicos;DESP;D;S;CMV
+4-1-1-03-0001;0064;Licencas de Software e Hospedagem;DESP;D;A;CMV
+4-1-2;0139;CUSTO DAS MERCADORIAS VENDIDAS (CMV);DESP;D;S;CMV
+4-1-2-01;0140;CMV;DESP;D;S;CMV
+4-1-2-01-0001;0141;CMV - Mercadorias Vendidas;DESP;D;A;CMV
+4-2;0065;DESPESAS OPERACIONAIS;DESP;D;S;DOPS
+4-2-1;0066;DESPESAS ADMINISTRATIVAS E COMERCIAIS;DESP;D;S;DOPS
+4-2-1-01;0067;Pessoal Administrativo;DESP;D;S;DOPS
+4-2-1-01-0001;0068;Pro-labore dos Socios;DESP;D;A;DOPS
+4-2-1-01-0002;0069;Salarios e Encargos - Administrativo;DESP;D;A;DOPS
+4-2-1-02;0070;Instalacoes e Ocupacao;DESP;D;S;DOPS
+4-2-1-02-0001;0071;Aluguel e Condominio;DESP;D;A;DOPS
+4-2-1-02-0002;0072;Energia Eletrica e Internet;DESP;D;A;DOPS
+4-2-1-03;0073;Despesas Gerais e Tributarias;DESP;D;S;DOPS
+4-2-1-03-0001;0074;Honorarios Contabeis;DESP;D;A;DOPS
+4-2-1-03-0002;0075;Tarifas Bancarias;DESP;D;A;DOPS
+4-2-1-03-0003;0076;Taxas e Alvaras Municipais (TLF, Sanitaria, etc);DESP;D;A;DOPS
+4-2-1-04;0142;Depreciacao e Amortizacao;DESP;D;S;DOPS
+4-2-1-04-0001;0143;Despesa de Depreciacao;DESP;D;A;DOPS
+4-2-1-04-0002;0144;Despesa de Amortizacao;DESP;D;A;DOPS
+4-3;0145;DESPESAS FINANCEIRAS;DESP;D;S;
+4-3-1;0146;Despesas Financeiras;DESP;D;S;DFIN
+4-3-1-01;0147;Juros e Encargos Passivos;DESP;D;S;DFIN
+4-3-1-01-0001;0148;Juros sobre Emprestimos e Financiamentos;DESP;D;A;DFIN
+4-3-1-01-0002;0149;IOF;DESP;D;A;DFIN
+4-3-1-01-0003;0150;Descontos Concedidos;DESP;D;A;DFIN
+4-5;0151;PROVISAO PARA IRPJ E CSLL;DESP;D;S;
+4-5-1;0152;Provisao para IRPJ e CSLL;DESP;D;S;IR
+4-5-1-01;0153;Provisoes;DESP;D;S;IR
+4-5-1-01-0001;0154;Provisao para IRPJ;DESP;D;A;IR
+4-5-1-01-0002;0155;Provisao para CSLL;DESP;D;A;IR

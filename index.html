@@ -915,6 +915,12 @@ select option{background:var(--card2);}
           </div>
           <button id="btn-trava-lanc" class="btn-gravar" style="min-width:200px;height:40px;" onclick="alternarTravaLancamentos()">🔒 Trava ATIVADA</button>
         </div>
+        <div style="padding:0 14px 14px;border-top:1px solid var(--border);margin-top:2px;">
+          <div style="font-size:11px;color:var(--muted);margin:12px 0 8px;line-height:1.5;">
+            <b style="color:var(--red);">Zona de perigo.</b> Use para recomeçar a escrituração desta empresa. Exporte um backup antes (aba Lançamentos › Exportar). A trava precisa estar desativada.
+          </div>
+          <button class="btn-sm" style="color:var(--red);border-color:var(--red);" onclick="apagarTodosLancamentos()"><i class="ti ti-trash"></i> Apagar TODOS os lançamentos desta empresa</button>
+        </div>
       </div>
       <!-- LISTA DE EMPRESAS -->
       <div id="cad-empresas" class="cad-sub" style="display:none;">
@@ -1099,12 +1105,14 @@ select option{background:var(--card2);}
               <input type="file" id="file-csv" accept=".csv,.txt" onchange="importarCSV(event)">
             </div>
             <div class="csv-hint">
-              Colunas: <code>codigo</code> · <code>nome</code> · <code>grupo</code> · <code>tipo</code> · <code>dre</code><br>
-              Separador: <code>;</code> ou <code>,</code>
+              Colunas: <code>codigo</code> · <code>chamada</code> · <code>nome</code> · <code>grupo</code> · <code>tipo</code> · <code>ind_cta</code> · <code>dre</code><br>
+              <code>ind_cta</code>: <b>S</b> = sintética (totaliza as filhas) · <b>A</b> = analítica (recebe lançamento). Separador: <code>;</code> ou <code>,</code>
             </div>
             <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
               <button class="btn-sm" onclick="baixarModeloCSV()">Baixar modelo</button>
+              <button class="btn-sm" onclick="exportarPlanoCSV()">Exportar plano (backup)</button>
               <button class="btn-sm" onclick="restaurarPadrao()">Restaurar padrão</button>
+              <button class="btn-sm" style="color:var(--red);border-color:var(--red);" onclick="limparPlanoContas()">Limpar plano</button>
             </div>
           </div>
         </div>
@@ -1565,6 +1573,93 @@ const CONTAS_PADRAO = [
   {slug:'c4_2_1_03_0001',codigo:'4-2-1-03-0001',chamada:'0074',nome:'Honorarios Contabeis',grupo:'DESP',tipo:'D',indCta:'A',dre:'DOPS'},
   {slug:'c4_2_1_03_0002',codigo:'4-2-1-03-0002',chamada:'0075',nome:'Tarifas Bancarias',grupo:'DESP',tipo:'D',indCta:'A',dre:'DOPS'},
   {slug:'c4_2_1_03_0003',codigo:'4-2-1-03-0003',chamada:'0076',nome:'Taxas e Alvaras Municipais (TLF, Sanitaria, etc)',grupo:'DESP',tipo:'D',indCta:'A',dre:'DOPS'},
+  // ===== CONTAS ADICIONAIS (estoque, imobilizado, financeiro, CMV, provisoes) =====
+  // -- Ativo Circulante: estoques, aplicacoes, adiantamentos --
+  {slug:'c1_1_4',codigo:'1-1-4',chamada:'0077',nome:'ESTOQUES',grupo:'AC',tipo:'D',indCta:'S'},
+  {slug:'c1_1_4_01',codigo:'1-1-4-01',chamada:'0078',nome:'Mercadorias e Insumos',grupo:'AC',tipo:'D',indCta:'S'},
+  {slug:'c1_1_4_01_0001',codigo:'1-1-4-01-0001',chamada:'0079',nome:'Mercadorias para Revenda',grupo:'AC',tipo:'D',indCta:'A'},
+  {slug:'c1_1_4_01_0002',codigo:'1-1-4-01-0002',chamada:'0080',nome:'Materiais e Insumos',grupo:'AC',tipo:'D',indCta:'A'},
+  {slug:'c1_1_5',codigo:'1-1-5',chamada:'0081',nome:'APLICACOES FINANCEIRAS',grupo:'AC',tipo:'D',indCta:'S'},
+  {slug:'c1_1_5_01',codigo:'1-1-5-01',chamada:'0082',nome:'Aplicacoes de Curto Prazo',grupo:'AC',tipo:'D',indCta:'S'},
+  {slug:'c1_1_5_01_0001',codigo:'1-1-5-01-0001',chamada:'0083',nome:'Aplicacoes Financeiras de Curto Prazo',grupo:'AC',tipo:'D',indCta:'A'},
+  {slug:'c1_1_6',codigo:'1-1-6',chamada:'0084',nome:'ADIANTAMENTOS',grupo:'AC',tipo:'D',indCta:'S'},
+  {slug:'c1_1_6_01',codigo:'1-1-6-01',chamada:'0085',nome:'Adiantamentos Concedidos',grupo:'AC',tipo:'D',indCta:'S'},
+  {slug:'c1_1_6_01_0001',codigo:'1-1-6-01-0001',chamada:'0086',nome:'Adiantamentos a Fornecedores',grupo:'AC',tipo:'D',indCta:'A'},
+  {slug:'c1_1_6_01_0002',codigo:'1-1-6-01-0002',chamada:'0087',nome:'Adiantamentos a Empregados',grupo:'AC',tipo:'D',indCta:'A'},
+  // -- Ativo Nao Circulante --
+  {slug:'c1_2',codigo:'1-2',chamada:'0088',nome:'ATIVO NAO CIRCULANTE',grupo:'ANC',tipo:'D',indCta:'S'},
+  {slug:'c1_2_1',codigo:'1-2-1',chamada:'0089',nome:'IMOBILIZADO',grupo:'ANC',tipo:'D',indCta:'S'},
+  {slug:'c1_2_1_01',codigo:'1-2-1-01',chamada:'0090',nome:'Bens em Operacao',grupo:'ANC',tipo:'D',indCta:'S'},
+  {slug:'c1_2_1_01_0001',codigo:'1-2-1-01-0001',chamada:'0091',nome:'Moveis e Utensilios',grupo:'ANC',tipo:'D',indCta:'A'},
+  {slug:'c1_2_1_01_0002',codigo:'1-2-1-01-0002',chamada:'0092',nome:'Equipamentos de Informatica',grupo:'ANC',tipo:'D',indCta:'A'},
+  {slug:'c1_2_1_01_0003',codigo:'1-2-1-01-0003',chamada:'0093',nome:'Maquinas e Equipamentos',grupo:'ANC',tipo:'D',indCta:'A'},
+  {slug:'c1_2_1_01_0004',codigo:'1-2-1-01-0004',chamada:'0094',nome:'Veiculos',grupo:'ANC',tipo:'D',indCta:'A'},
+  {slug:'c1_2_1_02',codigo:'1-2-1-02',chamada:'0095',nome:'Depreciacao Acumulada',grupo:'ANC',tipo:'C_RETIF',indCta:'S'},
+  {slug:'c1_2_1_02_0001',codigo:'1-2-1-02-0001',chamada:'0096',nome:'(-) Depreciacao Acumulada',grupo:'ANC',tipo:'C_RETIF',indCta:'A'},
+  {slug:'c1_2_2',codigo:'1-2-2',chamada:'0097',nome:'INTANGIVEL',grupo:'ANC',tipo:'D',indCta:'S'},
+  {slug:'c1_2_2_01',codigo:'1-2-2-01',chamada:'0098',nome:'Ativos Intangiveis',grupo:'ANC',tipo:'D',indCta:'S'},
+  {slug:'c1_2_2_01_0001',codigo:'1-2-2-01-0001',chamada:'0099',nome:'Softwares e Licencas de Uso',grupo:'ANC',tipo:'D',indCta:'A'},
+  {slug:'c1_2_2_02',codigo:'1-2-2-02',chamada:'0100',nome:'Amortizacao Acumulada',grupo:'ANC',tipo:'C_RETIF',indCta:'S'},
+  {slug:'c1_2_2_02_0001',codigo:'1-2-2-02-0001',chamada:'0101',nome:'(-) Amortizacao Acumulada',grupo:'ANC',tipo:'C_RETIF',indCta:'A'},
+  {slug:'c1_2_3',codigo:'1-2-3',chamada:'0102',nome:'INVESTIMENTOS',grupo:'ANC',tipo:'D',indCta:'S'},
+  {slug:'c1_2_3_01',codigo:'1-2-3-01',chamada:'0103',nome:'Participacoes Societarias',grupo:'ANC',tipo:'D',indCta:'S'},
+  {slug:'c1_2_3_01_0001',codigo:'1-2-3-01-0001',chamada:'0104',nome:'Participacoes em Coligadas e Controladas (MEP)',grupo:'ANC',tipo:'D',indCta:'A'},
+  // -- Passivo Circulante: emprestimos e outras obrigacoes --
+  {slug:'c2_1_4',codigo:'2-1-4',chamada:'0105',nome:'EMPRESTIMOS E FINANCIAMENTOS',grupo:'PC',tipo:'C',indCta:'S'},
+  {slug:'c2_1_4_01',codigo:'2-1-4-01',chamada:'0106',nome:'Instituicoes Financeiras',grupo:'PC',tipo:'C',indCta:'S'},
+  {slug:'c2_1_4_01_0001',codigo:'2-1-4-01-0001',chamada:'0107',nome:'Emprestimos Bancarios a Pagar (CP)',grupo:'PC',tipo:'C',indCta:'A'},
+  {slug:'c2_1_4_01_0002',codigo:'2-1-4-01-0002',chamada:'0108',nome:'Financiamentos a Pagar (CP)',grupo:'PC',tipo:'C',indCta:'A'},
+  {slug:'c2_1_5',codigo:'2-1-5',chamada:'0109',nome:'OUTRAS OBRIGACOES',grupo:'PC',tipo:'C',indCta:'S'},
+  {slug:'c2_1_5_01',codigo:'2-1-5-01',chamada:'0110',nome:'Contas a Pagar Diversas',grupo:'PC',tipo:'C',indCta:'S'},
+  {slug:'c2_1_5_01_0001',codigo:'2-1-5-01-0001',chamada:'0111',nome:'Adiantamentos de Clientes',grupo:'PC',tipo:'C',indCta:'A'},
+  {slug:'c2_1_5_01_0002',codigo:'2-1-5-01-0002',chamada:'0112',nome:'Contas a Pagar - Diversos',grupo:'PC',tipo:'C',indCta:'A'},
+  // -- Passivo Nao Circulante --
+  {slug:'c2_2',codigo:'2-2',chamada:'0113',nome:'PASSIVO NAO CIRCULANTE',grupo:'PNC',tipo:'C',indCta:'S'},
+  {slug:'c2_2_1',codigo:'2-2-1',chamada:'0114',nome:'EMPRESTIMOS E FINANCIAMENTOS LP',grupo:'PNC',tipo:'C',indCta:'S'},
+  {slug:'c2_2_1_01',codigo:'2-2-1-01',chamada:'0115',nome:'Instituicoes Financeiras LP',grupo:'PNC',tipo:'C',indCta:'S'},
+  {slug:'c2_2_1_01_0001',codigo:'2-2-1-01-0001',chamada:'0116',nome:'Financiamentos a Pagar (LP)',grupo:'PNC',tipo:'C',indCta:'A'},
+  {slug:'c2_2_1_01_0002',codigo:'2-2-1-01-0002',chamada:'0117',nome:'Emprestimos a Pagar (LP)',grupo:'PNC',tipo:'C',indCta:'A'},
+  {slug:'c2_2_2',codigo:'2-2-2',chamada:'0118',nome:'PARCELAMENTOS DE TRIBUTOS',grupo:'PNC',tipo:'C',indCta:'S'},
+  {slug:'c2_2_2_01',codigo:'2-2-2-01',chamada:'0119',nome:'Parcelamentos',grupo:'PNC',tipo:'C',indCta:'S'},
+  {slug:'c2_2_2_01_0001',codigo:'2-2-2-01-0001',chamada:'0120',nome:'Parcelamentos de Tributos (LP)',grupo:'PNC',tipo:'C',indCta:'A'},
+  // -- Patrimonio Liquido: lucros/prejuizos acumulados --
+  {slug:'c2_3_2',codigo:'2-3-2',chamada:'0121',nome:'RESERVAS E LUCROS ACUMULADOS',grupo:'PL',tipo:'C',indCta:'S'},
+  {slug:'c2_3_2_01',codigo:'2-3-2-01',chamada:'0122',nome:'Lucros ou Prejuizos Acumulados',grupo:'PL',tipo:'C',indCta:'S'},
+  {slug:'c2_3_2_01_0001',codigo:'2-3-2-01-0001',chamada:'0123',nome:'Lucros Acumulados',grupo:'PL',tipo:'C',indCta:'A'},
+  {slug:'c2_3_2_01_0002',codigo:'2-3-2-01-0002',chamada:'0124',nome:'(-) Prejuizos Acumulados',grupo:'PL',tipo:'D_RETIF',indCta:'A'},
+  // -- Receitas: venda de mercadorias, financeiras, outras --
+  {slug:'c3_1_2',codigo:'3-1-2',chamada:'0125',nome:'RECEITA DE VENDA DE MERCADORIAS',grupo:'REC',tipo:'C',indCta:'S',dre:'ROB'},
+  {slug:'c3_1_2_01',codigo:'3-1-2-01',chamada:'0126',nome:'Vendas no Mercado Interno',grupo:'REC',tipo:'C',indCta:'S',dre:'ROB'},
+  {slug:'c3_1_2_01_0001',codigo:'3-1-2-01-0001',chamada:'0127',nome:'Venda de Mercadorias',grupo:'REC',tipo:'C',indCta:'A',dre:'ROB'},
+  {slug:'c3_2_1_01_0005',codigo:'3-2-1-01-0005',chamada:'0128',nome:'ICMS sobre Faturamento',grupo:'REC',tipo:'D',indCta:'A',dre:'DED',retif:true},
+  {slug:'c3_3',codigo:'3-3',chamada:'0129',nome:'RECEITAS FINANCEIRAS',grupo:'REC',tipo:'C',indCta:'S'},
+  {slug:'c3_3_1',codigo:'3-3-1',chamada:'0130',nome:'Receitas Financeiras',grupo:'REC',tipo:'C',indCta:'S',dre:'RFIN'},
+  {slug:'c3_3_1_01',codigo:'3-3-1-01',chamada:'0131',nome:'Rendimentos e Juros Ativos',grupo:'REC',tipo:'C',indCta:'S',dre:'RFIN'},
+  {slug:'c3_3_1_01_0001',codigo:'3-3-1-01-0001',chamada:'0132',nome:'Rendimentos de Aplicacoes Financeiras',grupo:'REC',tipo:'C',indCta:'A',dre:'RFIN'},
+  {slug:'c3_3_1_01_0002',codigo:'3-3-1-01-0002',chamada:'0133',nome:'Juros Ativos e Descontos Obtidos',grupo:'REC',tipo:'C',indCta:'A',dre:'RFIN'},
+  {slug:'c3_4',codigo:'3-4',chamada:'0134',nome:'OUTRAS RECEITAS OPERACIONAIS',grupo:'REC',tipo:'C',indCta:'S'},
+  {slug:'c3_4_1',codigo:'3-4-1',chamada:'0135',nome:'Outras Receitas Operacionais',grupo:'REC',tipo:'C',indCta:'S',dre:'OREC'},
+  {slug:'c3_4_1_01',codigo:'3-4-1-01',chamada:'0136',nome:'Outras Receitas',grupo:'REC',tipo:'C',indCta:'S',dre:'OREC'},
+  {slug:'c3_4_1_01_0001',codigo:'3-4-1-01-0001',chamada:'0137',nome:'Receitas Diversas',grupo:'REC',tipo:'C',indCta:'A',dre:'OREC'},
+  {slug:'c3_4_1_01_0002',codigo:'3-4-1-01-0002',chamada:'0138',nome:'Ganhos na Alienacao de Imobilizado',grupo:'REC',tipo:'C',indCta:'A',dre:'OREC'},
+  // -- Custos e Despesas: CMV, depreciacao, financeiras, provisao IRPJ/CSLL --
+  {slug:'c4_1_2',codigo:'4-1-2',chamada:'0139',nome:'CUSTO DAS MERCADORIAS VENDIDAS (CMV)',grupo:'DESP',tipo:'D',indCta:'S',dre:'CMV'},
+  {slug:'c4_1_2_01',codigo:'4-1-2-01',chamada:'0140',nome:'CMV',grupo:'DESP',tipo:'D',indCta:'S',dre:'CMV'},
+  {slug:'c4_1_2_01_0001',codigo:'4-1-2-01-0001',chamada:'0141',nome:'CMV - Mercadorias Vendidas',grupo:'DESP',tipo:'D',indCta:'A',dre:'CMV'},
+  {slug:'c4_2_1_04',codigo:'4-2-1-04',chamada:'0142',nome:'Depreciacao e Amortizacao',grupo:'DESP',tipo:'D',indCta:'S',dre:'DOPS'},
+  {slug:'c4_2_1_04_0001',codigo:'4-2-1-04-0001',chamada:'0143',nome:'Despesa de Depreciacao',grupo:'DESP',tipo:'D',indCta:'A',dre:'DOPS'},
+  {slug:'c4_2_1_04_0002',codigo:'4-2-1-04-0002',chamada:'0144',nome:'Despesa de Amortizacao',grupo:'DESP',tipo:'D',indCta:'A',dre:'DOPS'},
+  {slug:'c4_3',codigo:'4-3',chamada:'0145',nome:'DESPESAS FINANCEIRAS',grupo:'DESP',tipo:'D',indCta:'S'},
+  {slug:'c4_3_1',codigo:'4-3-1',chamada:'0146',nome:'Despesas Financeiras',grupo:'DESP',tipo:'D',indCta:'S',dre:'DFIN'},
+  {slug:'c4_3_1_01',codigo:'4-3-1-01',chamada:'0147',nome:'Juros e Encargos Passivos',grupo:'DESP',tipo:'D',indCta:'S',dre:'DFIN'},
+  {slug:'c4_3_1_01_0001',codigo:'4-3-1-01-0001',chamada:'0148',nome:'Juros sobre Emprestimos e Financiamentos',grupo:'DESP',tipo:'D',indCta:'A',dre:'DFIN'},
+  {slug:'c4_3_1_01_0002',codigo:'4-3-1-01-0002',chamada:'0149',nome:'IOF',grupo:'DESP',tipo:'D',indCta:'A',dre:'DFIN'},
+  {slug:'c4_3_1_01_0003',codigo:'4-3-1-01-0003',chamada:'0150',nome:'Descontos Concedidos',grupo:'DESP',tipo:'D',indCta:'A',dre:'DFIN'},
+  {slug:'c4_5',codigo:'4-5',chamada:'0151',nome:'PROVISAO PARA IRPJ E CSLL',grupo:'DESP',tipo:'D',indCta:'S'},
+  {slug:'c4_5_1',codigo:'4-5-1',chamada:'0152',nome:'Provisao para IRPJ e CSLL',grupo:'DESP',tipo:'D',indCta:'S',dre:'IR'},
+  {slug:'c4_5_1_01',codigo:'4-5-1-01',chamada:'0153',nome:'Provisoes',grupo:'DESP',tipo:'D',indCta:'S',dre:'IR'},
+  {slug:'c4_5_1_01_0001',codigo:'4-5-1-01-0001',chamada:'0154',nome:'Provisao para IRPJ',grupo:'DESP',tipo:'D',indCta:'A',dre:'IR'},
+  {slug:'c4_5_1_01_0002',codigo:'4-5-1-01-0002',chamada:'0155',nome:'Provisao para CSLL',grupo:'DESP',tipo:'D',indCta:'A',dre:'IR'},
 ];
 
 function gerarIdConta(slug, idx) {
@@ -3387,6 +3482,64 @@ function exportarLancamentosCSV() {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
   a.download = 'lancamentos_contafacil.csv'; a.click();
   mostrarToast('Lançamentos exportados.');
+}
+
+// ── BACKUP / RECOMEÇAR ──
+// Exporta o plano de contas atual num CSV que a própria tela "Importar CSV" reimporta.
+function exportarPlanoCSV() {
+  if (!CONTAS.length) { alert('O plano de contas está vazio.'); return; }
+  const linhas = ['codigo;chamada;nome;grupo;tipo;ind_cta;dre'];
+  [...CONTAS]
+    .sort((a, b) => (a.codigo || '').localeCompare(b.codigo || '', undefined, { numeric: true }))
+    .forEach(c => linhas.push([c.codigo || '', c.chamada || '', c.nome, c.grupo, c.tipo, c.indCta || 'A', c.dre || ''].join(';')));
+  const blob = new Blob(['﻿' + linhas.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'plano_contas_backup.csv'; a.click();
+  mostrarToast('Plano de contas exportado (backup).');
+}
+
+// Apaga TODOS os lançamentos da empresa atual (irreversível). Respeita a trava de segurança.
+async function apagarTodosLancamentos() {
+  if (lancamentosTravados) {
+    alert('🔒 A trava de segurança está ativada.\n\nDesative em Cadastros › Segurança — Trava de Lançamentos antes de apagar em massa.');
+    return;
+  }
+  const n = historico.filter(h => !h.tipoEstorno).length;
+  if (!n) { alert('Não há lançamentos para apagar nesta empresa.'); return; }
+  const emp = (empresas.find(e => e.id === empresaId) || {}).nome || 'empresa atual';
+  alert(`ATENÇÃO: isso vai APAGAR PERMANENTEMENTE os ${n} lançamentos de "${emp}".\n\nExporte um backup antes (aba Lançamentos › Exportar). Esta ação NÃO pode ser desfeita.`);
+  const d = prompt('Para confirmar, digite APAGAR TUDO (em maiúsculas):');
+  if (d !== 'APAGAR TUDO') { mostrarToast('Cancelado — nada foi apagado.'); return; }
+  showLoading('Apagando lançamentos...');
+  const { error } = await sb.from('lancamentos').delete().eq('empresa_id', empresaId);
+  if (error) { hideLoading(); alert('Erro ao apagar: ' + (error.message || JSON.stringify(error))); return; }
+  historico = [];
+  recalcularSaldos();
+  renderizarTudo();
+  renderizarPlano();
+  hideLoading();
+  mostrarToast(`${n} lançamento(s) apagado(s).`);
+}
+
+// Apaga TODO o plano de contas da empresa atual — só permitido se nenhuma conta tiver lançamento.
+async function limparPlanoContas() {
+  if (!CONTAS.length) { alert('O plano de contas já está vazio.'); return; }
+  const comLanc = CONTAS.filter(c => historico.some(h => h.debitoId === c.id || h.creditoId === c.id));
+  if (comLanc.length) {
+    alert(`Não é possível limpar: ${comLanc.length} conta(s) ainda têm lançamentos.\n\nApague os lançamentos primeiro em Cadastros › Segurança › "Apagar todos os lançamentos".`);
+    return;
+  }
+  const emp = (empresas.find(e => e.id === empresaId) || {}).nome || 'empresa atual';
+  alert(`Isso vai APAGAR as ${CONTAS.length} contas do plano de "${emp}".\n\nExporte um backup antes (botão "Exportar plano"). Depois importe o plano novo pelo CSV.`);
+  const d = prompt('Para confirmar, digite LIMPAR (em maiúsculas):');
+  if (d !== 'LIMPAR') { mostrarToast('Cancelado.'); return; }
+  showLoading('Limpando plano de contas...');
+  const { error } = await sb.from('plano_contas').delete().eq('empresa_id', empresaId);
+  if (error) { hideLoading(); alert('Erro: ' + (error.message || JSON.stringify(error))); return; }
+  CONTAS = []; saldos = {};
+  renderizarPlano(); renderizarTudo();
+  hideLoading();
+  mostrarToast('Plano de contas limpo. Agora importe o CSV novo ou use "Restaurar padrão".');
 }
 
 // Converte uma célula de data (Date do Excel, dd/mm/aaaa ou aaaa-mm-dd) em ISO aaaa-mm-dd
