@@ -410,6 +410,12 @@ select option{background:var(--card2);}
 .csv-hint{background:var(--accent-bg);border:1px solid var(--border);border-radius:3px;padding:10px 12px;font-size:11px;color:var(--muted);line-height:1.7;margin-top:8px;}
 .csv-hint code{background:var(--accent-bg);color:var(--blue);padding:1px 5px;border-radius:3px;font-family:monospace;font-size:11px;}
 
+/* ── TABELA GENÉRICA (d-table) ── */
+.d-table{width:100%;border-collapse:collapse;font-size:12px;}
+.d-table th{text-align:left;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text2);padding:7px 10px;border-bottom:2px solid var(--border);background:var(--header-bg);}
+.d-table td{padding:7px 10px;border-bottom:1px solid var(--subtle-border);vertical-align:middle;}
+.d-table tr:hover td{background:var(--hover-row);}
+
 /* ── INFO BOX ── */
 .info-box{background:var(--accent-bg);border:1px solid var(--border);border-radius:3px;padding:8px 12px;font-size:11px;color:var(--muted);line-height:1.6;margin-top:10px;}
 .info-box b{color:var(--text);}
@@ -1568,7 +1574,15 @@ function contaPorCodigo(codigo) {
 }
 
 function contaPorChamada(ch) {
-  return CONTAS.find(c => c.chamada == ch);
+  const alvo = String(ch == null ? '' : ch).trim();
+  if (!alvo) return undefined;
+  const alvoNum = /^\d+$/.test(alvo) ? parseInt(alvo, 10) : null;
+  return CONTAS.find(c => {
+    const cc = String(c.chamada || '').trim();
+    if (!cc) return false;
+    if (cc === alvo) return true;
+    return alvoNum !== null && /^\d+$/.test(cc) && parseInt(cc, 10) === alvoNum;
+  });
 }
 
 // Insere linhas em plano_contas em lotes (chunks), removendo automaticamente colunas que ainda não
@@ -1706,19 +1720,19 @@ function imprimirRelatorio() {
 // ══════════════════════════════════════════════════
 // CENÁRIOS
 // ══════════════════════════════════════════════════
+// Chamadas alinhadas ao plano de contas padrão (0001–0076). Se o plano tiver sido
+// substituído, aplicarCenario() avisa "Conta não encontrada" sem quebrar nada.
 const CENARIOS = [
-  {label:'Capital',debito:25,credito:1180,valor:100000,desc:'Integralização de capital'},
-  {label:'Estoque',debito:320,credito:775,valor:30000,desc:'Compra de mercadorias a prazo'},
-  {label:'Venda',debito:95,credito:1415,valor:50000,desc:'Venda de mercadorias a prazo'},
-  {label:'CMV',debito:1725,credito:320,valor:30000,desc:'Custo das mercadorias vendidas'},
-  {label:'Imobilizado',debito:470,credito:25,valor:40000,desc:'Aquisição de equipamento à vista'},
-  {label:'Salários',debito:1885,credito:940,valor:8000,desc:'Reconhecimento de salários'},
-  {label:'Depreciação',debito:2245,credito:565,valor:2000,desc:'Depreciação mensal'},
-  {label:'Recebimento',debito:25,credito:95,valor:50000,desc:'Recebimento de clientes'},
-  {label:'Empréstimo',debito:25,credito:1145,valor:50000,desc:'Empréstimo bancário LP'},
-  {label:'Juros',debito:2555,credito:800,valor:1500,desc:'Encargos financeiros'},
-  {label:'IR/CSLL',debito:2725,credito:800,valor:6460,desc:'Provisão IRPJ e CSLL'},
-  {label:'Pag. Fornec.',debito:775,credito:25,valor:30000,desc:'Pagamento a fornecedor'},
+  {label:'Capital',         debito:'0005', credito:'0042', valor:50000, desc:'Integralização de capital social'},
+  {label:'Prestação serv.', debito:'0010', credito:'0048', valor:12000, desc:'Serviços prestados — NF 001'},
+  {label:'Receb. cliente',  debito:'0005', credito:'0010', valor:12000, desc:'Recebimento de cliente'},
+  {label:'Simples s/ fat.', debito:'0052', credito:'0033', valor:720,   desc:'Simples Nacional sobre o faturamento'},
+  {label:'Pgto DAS',        debito:'0033', credito:'0005', valor:720,   desc:'Pagamento do DAS (Simples)'},
+  {label:'Pró-labore',      debito:'0068', credito:'0026', valor:5000,  desc:'Pró-labore dos sócios (competência)'},
+  {label:'Aluguel',         debito:'0071', credito:'0005', valor:2500,  desc:'Aluguel do escritório'},
+  {label:'Honor. contáb.',  debito:'0074', credito:'0023', valor:900,   desc:'Honorários contábeis a pagar'},
+  {label:'Tarifa banco',    debito:'0075', credito:'0005', valor:80,    desc:'Tarifas bancárias'},
+  {label:'Pgto fornecedor', debito:'0023', credito:'0005', valor:900,   desc:'Pagamento a fornecedor'},
 ];
 
 function mascaraMonetaria(id) {
@@ -2001,8 +2015,11 @@ function renderizarBalanco(fD, fC) {
   const sp = dtFim ? calcSaldosPeriodo(null, dtFim) : saldos;
   const sumP = (grupo) => CONTAS.filter(c => c.grupo === grupo).reduce((s, c) => s + sp[c.id], 0);
 
+  // Só contas analíticas nas linhas do BP: sintéticas mostrariam o total consolidado dos
+  // filhos e, aparecendo lado a lado, fariam a soma das linhas não "bater" com o TOTAL
+  // (que considera apenas analíticas). A visão consolidada por sintética fica no Balancete.
   const gp = { ac: [], anc: [], pc: [], pnc: [], pl: [] };
-  CONTAS.filter(c => GRUPOS_BP.includes(c.grupo)).forEach(c => gp[GRUPOS[c.grupo]].push(c));
+  CONTAS.filter(c => GRUPOS_BP.includes(c.grupo) && c.indCta !== 'S').forEach(c => gp[GRUPOS[c.grupo]].push(c));
   ['ac', 'anc', 'pc', 'pnc'].forEach(g => {
     const el = document.getElementById('contas-' + g); el.innerHTML = '';
     gp[g].forEach(c => {
@@ -2065,7 +2082,9 @@ function calcDRE(sp) {
   const rob = CONTAS.filter(c => c.dre === 'ROB').reduce((s, c) => s + g(c.id), 0);
   const ded = CONTAS.filter(c => c.dre === 'DED').reduce((s, c) => s + g(c.id), 0);
   const rol = rob - ded, cmv = CONTAS.filter(c => c.dre === 'CMV').reduce((s, c) => s + g(c.id), 0);
-  const lb = rol - cmv, dops = CONTAS.filter(c => c.dre === 'DOPS').reduce((s, c) => s + g(c.id), 0);
+  // Despesa do grupo DESP sem tag de DRE cai em "Despesas Operacionais" — assim o
+  // resultado da DRE bate com o do Balanço/Dashboard (calcResultado soma todo o grupo DESP).
+  const lb = rol - cmv, dops = CONTAS.filter(c => c.dre === 'DOPS' || (c.grupo === 'DESP' && c.indCta !== 'S' && !c.dre)).reduce((s, c) => s + g(c.id), 0);
   const lajir = lb - dops;
   const recFin = CONTAS.filter(c => c.dre === 'RFIN').reduce((s, c) => s + g(c.id), 0);
   const despFin = CONTAS.filter(c => c.dre === 'DFIN').reduce((s, c) => s + g(c.id), 0);
@@ -3488,12 +3507,20 @@ async function importarLancamentosCSV(input) {
 }
 
 function baixarModeloLancamentos() {
-  const dados = [
-    ['data', 'debito', 'credito', 'descricao', 'valor'],
-    ['2026-01-31', 'Caixa e Equivalentes', 'Capital Social', 'Integralização de capital', 10000],
-    ['2026-02-10', 'Caixa e Equivalentes', 'Receita de Serviços', 'Prestação de serviços NF 001', 5000],
-    ['2026-02-20', 'Despesas com Salários', 'Caixa e Equivalentes', 'Pagamento de salários', 3500],
-  ];
+  // Monta o modelo com contas analíticas REAIS do plano carregado, pra planilha já
+  // importar sem "conta não encontrada".
+  const analiticas = CONTAS.filter(c => c.indCta !== 'S');
+  const pick = grp => analiticas.find(c => c.grupo === grp);
+  const caixa = pick('AC') || analiticas[0];
+  const capital = analiticas.find(c => c.grupo === 'PL') || pick('PC');
+  const receita = pick('REC');
+  const despesa = pick('DESP');
+  const hoje = new Date().toISOString().slice(0, 10);
+  const dados = [['data', 'debito', 'credito', 'descricao', 'valor']];
+  if (caixa && capital) dados.push([hoje, caixa.nome, capital.nome, 'Integralização de capital', 10000]);
+  if (caixa && receita) dados.push([hoje, caixa.nome, receita.nome, 'Prestação de serviços NF 001', 5000]);
+  if (caixa && despesa) dados.push([hoje, despesa.nome, caixa.nome, 'Pagamento de despesa', 3500]);
+  if (dados.length === 1) dados.push([hoje, '', '', 'Preencha com nomes de contas analíticas do seu plano', 0]);
   if (typeof XLSX !== 'undefined') {
     const ws = XLSX.utils.aoa_to_sheet(dados);
     ws['!cols'] = [{ wch: 12 }, { wch: 28 }, { wch: 28 }, { wch: 32 }, { wch: 12 }];

@@ -410,6 +410,12 @@ select option{background:var(--card2);}
 .csv-hint{background:var(--accent-bg);border:1px solid var(--border);border-radius:3px;padding:10px 12px;font-size:11px;color:var(--muted);line-height:1.7;margin-top:8px;}
 .csv-hint code{background:var(--accent-bg);color:var(--blue);padding:1px 5px;border-radius:3px;font-family:monospace;font-size:11px;}
 
+/* ── TABELA GENÉRICA (d-table) ── */
+.d-table{width:100%;border-collapse:collapse;font-size:12px;}
+.d-table th{text-align:left;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text2);padding:7px 10px;border-bottom:2px solid var(--border);background:var(--header-bg);}
+.d-table td{padding:7px 10px;border-bottom:1px solid var(--subtle-border);vertical-align:middle;}
+.d-table tr:hover td{background:var(--hover-row);}
+
 /* ── INFO BOX ── */
 .info-box{background:var(--accent-bg);border:1px solid var(--border);border-radius:3px;padding:8px 12px;font-size:11px;color:var(--muted);line-height:1.6;margin-top:10px;}
 .info-box b{color:var(--text);}
@@ -1186,6 +1192,23 @@ select option{background:var(--card2);}
   </div>
 </div>
 
+<!-- Modal de confirmação genérico (substitui o confirm() nativo do navegador) -->
+<div class="modal-overlay" id="modal-confirm-generic" style="display:none;" onclick="if(event.target===event.currentTarget)_confirmModalResolve(false)">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header" id="modal-confirm-header">
+      <div class="modal-title"><i class="ti ti-help-circle" id="modal-confirm-icon"></i> <span id="modal-confirm-titulo">Confirmar</span></div>
+      <button class="modal-close" id="modal-confirm-close" onclick="_confirmModalResolve(false)">✕</button>
+    </div>
+    <div class="modal-body" style="padding:18px;">
+      <p id="modal-confirm-msg" style="margin:0;font-size:12.5px;color:var(--text2);line-height:1.6;white-space:pre-line;"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancelar" id="modal-confirm-btn-cancel" onclick="_confirmModalResolve(false)">Cancelar</button>
+      <button class="btn-gravar" id="modal-confirm-btn-ok" onclick="_confirmModalResolve(true)">OK</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════
 // SUPABASE CONFIG
@@ -1551,7 +1574,15 @@ function contaPorCodigo(codigo) {
 }
 
 function contaPorChamada(ch) {
-  return CONTAS.find(c => c.chamada == ch);
+  const alvo = String(ch == null ? '' : ch).trim();
+  if (!alvo) return undefined;
+  const alvoNum = /^\d+$/.test(alvo) ? parseInt(alvo, 10) : null;
+  return CONTAS.find(c => {
+    const cc = String(c.chamada || '').trim();
+    if (!cc) return false;
+    if (cc === alvo) return true;
+    return alvoNum !== null && /^\d+$/.test(cc) && parseInt(cc, 10) === alvoNum;
+  });
 }
 
 // Insere linhas em plano_contas em lotes (chunks), removendo automaticamente colunas que ainda não
@@ -1689,19 +1720,19 @@ function imprimirRelatorio() {
 // ══════════════════════════════════════════════════
 // CENÁRIOS
 // ══════════════════════════════════════════════════
+// Chamadas alinhadas ao plano de contas padrão (0001–0076). Se o plano tiver sido
+// substituído, aplicarCenario() avisa "Conta não encontrada" sem quebrar nada.
 const CENARIOS = [
-  {label:'Capital',debito:25,credito:1180,valor:100000,desc:'Integralização de capital'},
-  {label:'Estoque',debito:320,credito:775,valor:30000,desc:'Compra de mercadorias a prazo'},
-  {label:'Venda',debito:95,credito:1415,valor:50000,desc:'Venda de mercadorias a prazo'},
-  {label:'CMV',debito:1725,credito:320,valor:30000,desc:'Custo das mercadorias vendidas'},
-  {label:'Imobilizado',debito:470,credito:25,valor:40000,desc:'Aquisição de equipamento à vista'},
-  {label:'Salários',debito:1885,credito:940,valor:8000,desc:'Reconhecimento de salários'},
-  {label:'Depreciação',debito:2245,credito:565,valor:2000,desc:'Depreciação mensal'},
-  {label:'Recebimento',debito:25,credito:95,valor:50000,desc:'Recebimento de clientes'},
-  {label:'Empréstimo',debito:25,credito:1145,valor:50000,desc:'Empréstimo bancário LP'},
-  {label:'Juros',debito:2555,credito:800,valor:1500,desc:'Encargos financeiros'},
-  {label:'IR/CSLL',debito:2725,credito:800,valor:6460,desc:'Provisão IRPJ e CSLL'},
-  {label:'Pag. Fornec.',debito:775,credito:25,valor:30000,desc:'Pagamento a fornecedor'},
+  {label:'Capital',         debito:'0005', credito:'0042', valor:50000, desc:'Integralização de capital social'},
+  {label:'Prestação serv.', debito:'0010', credito:'0048', valor:12000, desc:'Serviços prestados — NF 001'},
+  {label:'Receb. cliente',  debito:'0005', credito:'0010', valor:12000, desc:'Recebimento de cliente'},
+  {label:'Simples s/ fat.', debito:'0052', credito:'0033', valor:720,   desc:'Simples Nacional sobre o faturamento'},
+  {label:'Pgto DAS',        debito:'0033', credito:'0005', valor:720,   desc:'Pagamento do DAS (Simples)'},
+  {label:'Pró-labore',      debito:'0068', credito:'0026', valor:5000,  desc:'Pró-labore dos sócios (competência)'},
+  {label:'Aluguel',         debito:'0071', credito:'0005', valor:2500,  desc:'Aluguel do escritório'},
+  {label:'Honor. contáb.',  debito:'0074', credito:'0023', valor:900,   desc:'Honorários contábeis a pagar'},
+  {label:'Tarifa banco',    debito:'0075', credito:'0005', valor:80,    desc:'Tarifas bancárias'},
+  {label:'Pgto fornecedor', debito:'0023', credito:'0005', valor:900,   desc:'Pagamento a fornecedor'},
 ];
 
 function mascaraMonetaria(id) {
@@ -1857,7 +1888,7 @@ async function apagarLancamento(idx) {
     return;
   }
   const h = historico[idx];
-  if (!confirm(`Apagar lançamento "${h.desc}" (${fmt(h.valor)})?`)) return;
+  if (!(await confirmarAcao(`Apagar lançamento "${h.desc}" (${fmt(h.valor)})?`, { titulo: 'Apagar Lançamento', perigo: true, textoOk: 'Apagar' }))) return;
 
   const { error } = await sb.from('lancamentos').delete().eq('id', h._dbId);
   if (error) { alert('Erro ao apagar: ' + error.message); return; }
@@ -1945,6 +1976,30 @@ function calcResultado(sp) {
   return rob - ded - desp + recFin + orec;
 }
 
+// ══════════════════════════════════════════════════
+// HIERARQUIA DE CONTAS (Sintética ↔ Analítica)
+// ══════════════════════════════════════════════════
+// Uma conta Sintética nunca recebe lançamento direto — ela existe para agrupar/totalizar as
+// contas Analíticas "filhas" (mesma lógica de código-pai/código-filho da Classificação).
+// Aceita tanto o padrão novo (traços: 1-1-1-01) quanto o legado Multiverse (pontos: 5.1.01).
+function _segmentosCodigo(codigo) {
+  return String(codigo || '').split(/[-.]/).filter(s => s !== '');
+}
+function _ehDescendente(codigo, codigoPai) {
+  const segs = _segmentosCodigo(codigo), pai = _segmentosCodigo(codigoPai);
+  if (!pai.length || segs.length <= pai.length) return false;
+  return pai.every((s, i) => segs[i] === s);
+}
+// Saldo "de exibição" de uma conta: para Analítica é o saldo direto (sp[id]); para Sintética
+// é a soma do saldo de todas as Analíticas descendentes — é para isso que serve uma sintética.
+function saldoExibicao(conta, sp) {
+  const ss = sp || saldos;
+  if (!conta) return 0;
+  if (conta.indCta !== 'S') return ss[conta.id] || 0;
+  return CONTAS.filter(c => c.indCta !== 'S' && _ehDescendente(c.codigo, conta.codigo))
+    .reduce((s, c) => s + (ss[c.id] || 0), 0);
+}
+
 function balancoTrimestre(t) {
   const anoInp = document.getElementById('bp-ano');
   let ano = parseInt(anoInp?.value, 10);
@@ -1960,13 +2015,16 @@ function renderizarBalanco(fD, fC) {
   const sp = dtFim ? calcSaldosPeriodo(null, dtFim) : saldos;
   const sumP = (grupo) => CONTAS.filter(c => c.grupo === grupo).reduce((s, c) => s + sp[c.id], 0);
 
+  // Só contas analíticas nas linhas do BP: sintéticas mostrariam o total consolidado dos
+  // filhos e, aparecendo lado a lado, fariam a soma das linhas não "bater" com o TOTAL
+  // (que considera apenas analíticas). A visão consolidada por sintética fica no Balancete.
   const gp = { ac: [], anc: [], pc: [], pnc: [], pl: [] };
-  CONTAS.filter(c => GRUPOS_BP.includes(c.grupo)).forEach(c => gp[GRUPOS[c.grupo]].push(c));
+  CONTAS.filter(c => GRUPOS_BP.includes(c.grupo) && c.indCta !== 'S').forEach(c => gp[GRUPOS[c.grupo]].push(c));
   ['ac', 'anc', 'pc', 'pnc'].forEach(g => {
     const el = document.getElementById('contas-' + g); el.innerHTML = '';
     gp[g].forEach(c => {
       const div = document.createElement('div'); div.className = 'conta-item'; div.id = 'conta-' + c.id;
-      div.innerHTML = `<span class="conta-nome">${c.nome}</span><span class="conta-valor">${fmt(sp[c.id])}</span>`;
+      div.innerHTML = `<span class="conta-nome"${c.indCta === 'S' ? ' style="font-weight:600;"' : ''}>${c.nome}</span><span class="conta-valor">${fmt(saldoExibicao(c, sp))}</span>`;
       el.appendChild(div);
     });
   });
@@ -1978,7 +2036,7 @@ function renderizarBalanco(fD, fC) {
   const elPL = document.getElementById('contas-pl'); elPL.innerHTML = '';
   gp['pl'].forEach(c => {
     const div = document.createElement('div'); div.className = 'conta-item'; div.id = 'conta-' + c.id;
-    div.innerHTML = `<span class="conta-nome">${c.nome}</span><span class="conta-valor">${fmt(sp[c.id])}</span>`;
+    div.innerHTML = `<span class="conta-nome"${c.indCta === 'S' ? ' style="font-weight:600;"' : ''}>${c.nome}</span><span class="conta-valor">${fmt(saldoExibicao(c, sp))}</span>`;
     elPL.appendChild(div);
   });
   if (Math.abs(res) > 0.005) {
@@ -2024,7 +2082,9 @@ function calcDRE(sp) {
   const rob = CONTAS.filter(c => c.dre === 'ROB').reduce((s, c) => s + g(c.id), 0);
   const ded = CONTAS.filter(c => c.dre === 'DED').reduce((s, c) => s + g(c.id), 0);
   const rol = rob - ded, cmv = CONTAS.filter(c => c.dre === 'CMV').reduce((s, c) => s + g(c.id), 0);
-  const lb = rol - cmv, dops = CONTAS.filter(c => c.dre === 'DOPS').reduce((s, c) => s + g(c.id), 0);
+  // Despesa do grupo DESP sem tag de DRE cai em "Despesas Operacionais" — assim o
+  // resultado da DRE bate com o do Balanço/Dashboard (calcResultado soma todo o grupo DESP).
+  const lb = rol - cmv, dops = CONTAS.filter(c => c.dre === 'DOPS' || (c.grupo === 'DESP' && c.indCta !== 'S' && !c.dre)).reduce((s, c) => s + g(c.id), 0);
   const lajir = lb - dops;
   const recFin = CONTAS.filter(c => c.dre === 'RFIN').reduce((s, c) => s + g(c.id), 0);
   const despFin = CONTAS.filter(c => c.dre === 'DFIN').reduce((s, c) => s + g(c.id), 0);
@@ -2386,6 +2446,56 @@ function renderizarRazao() {
   </div>`;
 
   contasFiltradas.forEach(c => {
+    if (c.indCta === 'S') {
+      const descendentes = CONTAS.filter(x => x.indCta !== 'S' && _ehDescendente(x.codigo, c.codigo));
+      if (!descendentes.length) return;
+      let saldoAnteriorTot = 0, totalDebTot = 0, totalCredTot = 0, saldoAtualTot = 0;
+      const linhasContas = descendentes.map(fc => {
+        const movsF = movPorConta[fc.id] || [];
+        const isDevF = (fc.tipo === 'D' || fc.tipo === 'C_RETIF');
+        let movsAntF = [], movsPerF = movsF;
+        if (dtIni) { movsAntF = movsF.filter(m => m.data < dtIni && !m.estornado && !m.tipoEstorno); movsPerF = movsF.filter(m => !m.data || m.data >= dtIni); }
+        if (dtFim) movsPerF = movsPerF.filter(m => !m.data || m.data <= dtFim);
+        let saldoAntF = 0;
+        movsAntF.forEach(m => { saldoAntF += m.valor * ((m._lado === 'D') === isDevF ? 1 : -1); });
+        let debF = 0, credF = 0, saldoF = saldoAntF;
+        movsPerF.forEach(m => {
+          if (m.estornado || m.tipoEstorno) return;
+          if (m._lado === 'D') debF += m.valor; else credF += m.valor;
+          saldoF += m.valor * ((m._lado === 'D') === isDevF ? 1 : -1);
+        });
+        saldoAnteriorTot += saldoAntF; totalDebTot += debF; totalCredTot += credF; saldoAtualTot += saldoF;
+        if (Math.abs(saldoAntF) < 0.005 && debF < 0.005 && credF < 0.005) return '';
+        return `<tr>
+          <td class="rz-td-hist">${fc.chamada ? fc.chamada + ' — ' : ''}${fc.nome}</td>
+          <td class="rz-td-deb">${debF > 0 ? fmt(debF) : '<span class="rz-empty-val">—</span>'}</td>
+          <td class="rz-td-cred">${credF > 0 ? fmt(credF) : '<span class="rz-empty-val">—</span>'}</td>
+          <td class="rz-td-saldo">${fmt(saldoF)}</td>
+        </tr>`;
+      }).join('');
+      if (!linhasContas.replace(/\s/g, '')) return;
+      html += `<div class="razao-section">
+        <div class="razao-section-header grupo-${c.grupo}">
+          <span class="rz-conta-cod">${c.chamada || c.codigo || '—'}</span>
+          <span class="rz-conta-nome">${c.nome} <span style="opacity:.6;font-weight:400;">(sintética — saldo consolidado das analíticas)</span></span>
+          <span class="rz-saldo-final">${fmt(saldoAtualTot)}</span>
+        </div>
+        <table class="rz-table">
+          <thead><tr>
+            <th>Conta Analítica</th>
+            <th class="rz-th-val" style="width:100px">Débito</th>
+            <th class="rz-th-val" style="width:100px">Crédito</th>
+            <th class="rz-th-val" style="width:110px">Saldo</th>
+          </tr></thead>
+          <tbody>
+            <tr class="rz-saldo-ant"><td colspan="3">Saldo Anterior (consolidado)</td><td class="rz-td-saldo">${fmt(saldoAnteriorTot)}</td></tr>
+            ${linhasContas}
+            <tr class="rz-total"><td>Totais Consolidados</td><td class="rz-td-deb">${totalDebTot > 0 ? fmt(totalDebTot) : '—'}</td><td class="rz-td-cred">${totalCredTot > 0 ? fmt(totalCredTot) : '—'}</td><td class="rz-td-saldo">${fmt(saldoAtualTot)}</td></tr>
+          </tbody>
+        </table>
+      </div>`;
+      return;
+    }
     const movs = movPorConta[c.id] || [];
     const isDevedor = (c.tipo === 'D' || c.tipo === 'C_RETIF');
 
@@ -2511,6 +2621,16 @@ function renderizarBalancete() {
     }
   });
 
+  // Conta Sintética não recebe lançamento direto: seu saldo de exibição é a soma das
+  // contas Analíticas descendentes (é para isso que serve uma conta sintética).
+  const calcC = (c) => {
+    const mm = movPorConta[c.id];
+    const isDD = (c.tipo === 'D' || c.tipo === 'C_RETIF');
+    const sAnt = isDD ? (mm.debAnt - mm.credAnt) : (mm.credAnt - mm.debAnt);
+    const sAtual = sAnt + (isDD ? (mm.debitos - mm.creditos) : (mm.creditos - mm.debitos));
+    return { saldoAnt: sAnt, saldoAtual: sAtual, debitos: mm.debitos, creditos: mm.creditos };
+  };
+
   const fmtV = (v) => v > 0.005 ? `<span class="bal-${v > 0 ? 'deb' : 'deb'}">${fmt(v)}</span>` : '<span class="bt-val-zero">0,00</span>';
   const fmtCell = (v) => Math.abs(v) > 0.005 ? fmt(Math.abs(v)) : '<span class="bt-val-zero">0,00</span>';
 
@@ -2541,17 +2661,33 @@ function renderizarBalancete() {
       const saldoAnt = isD ? (m.debAnt - m.credAnt) : (m.credAnt - m.debAnt);
       const saldoAtual = saldoAnt + (isD ? (m.debitos - m.creditos) : (m.creditos - m.debitos));
 
+      // Totais do grupo usam sempre o valor BRUTO da própria conta: sintéticas nunca recebem
+      // lançamento direto (contribuem 0 aqui), o saldo real já está nas analíticas filhas —
+      // somar os dois lados evita dupla contagem no total do grupo.
       grpSaldoAnt += saldoAnt; grpDeb += m.debitos; grpCred += m.creditos; grpSaldoAtual += saldoAtual;
 
-      if (Math.abs(saldoAnt) < 0.005 && m.debitos < 0.005 && m.creditos < 0.005) return '';
+      // Exibição da linha: conta Sintética mostra o total consolidado das Analíticas
+      // descendentes (via código/classificação), não seu próprio saldo bruto (sempre 0).
+      let dispSaldoAnt = saldoAnt, dispDeb = m.debitos, dispCred = m.creditos, dispSaldoAtual = saldoAtual;
+      if (c.indCta === 'S') {
+        const agg = CONTAS.filter(x => x.indCta !== 'S' && _ehDescendente(x.codigo, c.codigo))
+          .reduce((acc, d) => {
+            const v = calcC(d);
+            acc.saldoAnt += v.saldoAnt; acc.saldoAtual += v.saldoAtual; acc.debitos += v.debitos; acc.creditos += v.creditos;
+            return acc;
+          }, { saldoAnt: 0, saldoAtual: 0, debitos: 0, creditos: 0 });
+        dispSaldoAnt = agg.saldoAnt; dispDeb = agg.debitos; dispCred = agg.creditos; dispSaldoAtual = agg.saldoAtual;
+      }
+
+      if (Math.abs(dispSaldoAnt) < 0.005 && dispDeb < 0.005 && dispCred < 0.005) return '';
 
       return `<tr class="bt-row-conta">
-        <td class="bt-desc">${c.nome}</td>
+        <td class="bt-desc"${c.indCta === 'S' ? ' style="font-weight:600;"' : ''}>${c.nome}${c.indCta === 'S' ? ' <span style="opacity:.55;font-weight:400;">(sintética)</span>' : ''}</td>
         <td class="bt-cod">${c.chamada || c.codigo || '—'}</td>
-        <td class="bt-val">${fmtCell(saldoAnt)}</td>
-        <td class="bt-val">${m.debitos > 0.005 ? fmt(m.debitos) : '<span class="bt-val-zero">0,00</span>'}</td>
-        <td class="bt-val">${m.creditos > 0.005 ? fmt(m.creditos) : '<span class="bt-val-zero">0,00</span>'}</td>
-        <td class="bt-val">${fmtCell(saldoAtual)}</td>
+        <td class="bt-val">${fmtCell(dispSaldoAnt)}</td>
+        <td class="bt-val">${dispDeb > 0.005 ? fmt(dispDeb) : '<span class="bt-val-zero">0,00</span>'}</td>
+        <td class="bt-val">${dispCred > 0.005 ? fmt(dispCred) : '<span class="bt-val-zero">0,00</span>'}</td>
+        <td class="bt-val">${fmtCell(dispSaldoAtual)}</td>
       </tr>`;
     }).join('');
 
@@ -2798,6 +2934,46 @@ function mascaraCEP(el) {
   el.value = v;
 }
 
+// ══════════════════════════════════════════════════
+// MODAL DE CONFIRMAÇÃO (substitui window.confirm)
+// ══════════════════════════════════════════════════
+let _confirmModalResolver = null;
+function _confirmModalResolve(valor) {
+  const overlay = document.getElementById('modal-confirm-generic');
+  overlay.style.display = 'none';
+  if (_confirmModalResolver) { const r = _confirmModalResolver; _confirmModalResolver = null; r(valor); }
+}
+// confirmarAcao(mensagem, { titulo, perigo, textoOk, textoCancelar }) -> Promise<boolean>
+// perigo:true deixa o cabeçalho e o botão OK em vermelho (ações destrutivas/irreversíveis).
+function confirmarAcao(mensagem, opts = {}) {
+  return new Promise(resolve => {
+    _confirmModalResolver = resolve;
+    document.getElementById('modal-confirm-titulo').textContent = opts.titulo || 'Confirmar';
+    document.getElementById('modal-confirm-msg').textContent = mensagem;
+    const header = document.getElementById('modal-confirm-header');
+    const btnOk = document.getElementById('modal-confirm-btn-ok');
+    const icon = document.getElementById('modal-confirm-icon');
+    if (opts.perigo) {
+      header.style.background = 'var(--red)'; header.style.color = '#fff';
+      btnOk.style.background = 'var(--red)';
+      icon.className = 'ti ti-alert-triangle';
+    } else {
+      header.style.background = ''; header.style.color = '';
+      btnOk.style.background = '';
+      icon.className = 'ti ti-help-circle';
+    }
+    btnOk.textContent = opts.textoOk || 'OK';
+    document.getElementById('modal-confirm-btn-cancel').textContent = opts.textoCancelar || 'Cancelar';
+    document.getElementById('modal-confirm-generic').style.display = 'flex';
+    setTimeout(() => btnOk.focus(), 60);
+  });
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !_confirmModalResolver) return;
+  const overlay = document.getElementById('modal-confirm-generic');
+  if (overlay && overlay.style.display === 'flex') _confirmModalResolve(false);
+});
+
 async function buscarCEP() {
   const cep = document.getElementById('emp-cep').value.replace(/\D/g, '');
   if (cep.length !== 8) return;
@@ -2949,7 +3125,7 @@ async function editarChamada(id) {
   const novo = novoRaw.trim() === '' ? null : _formatarChamada(novoRaw);
   if (novoRaw.trim() !== '' && !novo) { alert('Código inválido. Use apenas números, ex: 1 ou 0001.'); return; }
   if (novo && CONTAS.some(x => x.id !== id && x.chamada === novo)) {
-    if (!confirm(`O código ${novo} já está em uso por outra conta. Usar mesmo assim?`)) return;
+    if (!(await confirmarAcao(`O código ${novo} já está em uso por outra conta. Usar mesmo assim?`, { titulo: 'Código já em uso', textoOk: 'Usar mesmo assim' }))) return;
   }
   const { error } = await sb.from('plano_contas').update({ chamada: novo }).eq('id', id).eq('empresa_id', empresaId);
   if (error) { alert('Erro ao salvar: ' + error.message); return; }
@@ -2961,7 +3137,7 @@ async function editarChamada(id) {
 // Renumera TODAS as contas em sequência de 4 dígitos (0001, 0002, ...), na ordem atual da tabela
 async function renumerarChamadas() {
   const ordem = [...CONTAS].sort((a, b) => (a.codigo || '').localeCompare(b.codigo || '', undefined, { numeric: true }));
-  if (!confirm(`Isso vai substituir o código (chamada) de todas as ${ordem.length} contas por uma sequência 0001, 0002, 0003...\n\nSe você já preencheu uma planilha de lançamentos usando os códigos atuais e ainda não importou, os códigos vão mudar.\n\nContinuar?`)) return;
+  if (!(await confirmarAcao(`Isso vai substituir o código (chamada) de todas as ${ordem.length} contas por uma sequência 0001, 0002, 0003...\n\nSe você já preencheu uma planilha de lançamentos usando os códigos atuais e ainda não importou, os códigos vão mudar.`, { titulo: 'Renumerar todas as chamadas', perigo: true, textoOk: 'Renumerar' }))) return;
 
   mostrarToast('Renumerando contas...');
   const atualizacoes = ordem.map((c, i) => ({ id: c.id, chamada: String(i + 1).padStart(4, '0') }));
@@ -3080,7 +3256,7 @@ function cancelarEdicaoConta() {
 async function deletarConta(id) {
   const c = CONTAS.find(x => x.id === id);
   if (!c) return;
-  if (!confirm(`Remover "${c.chamada || c.codigo} — ${c.nome}"?`)) return;
+  if (!(await confirmarAcao(`"${c.chamada || c.codigo} — ${c.nome}"`, { titulo: 'Remover Conta', perigo: true, textoOk: 'Remover' }))) return;
   const { error } = await sb.from('plano_contas').delete().eq('id', id).eq('empresa_id', empresaId);
   if (error) { alert('Erro: ' + error.message); return; }
   const idx = CONTAS.indexOf(c); CONTAS.splice(idx, 1); delete saldos[id];
@@ -3295,12 +3471,14 @@ async function importarLancamentosCSV(input) {
   }
 
   if (erros.length) {
-    const ok = confirm(`${registros.length} lançamento(s) válido(s), ${erros.length} erro(s).\n\n` +
-      erros.slice(0, 5).join('\n') + (erros.length > 5 ? `\n... e mais ${erros.length - 5}` : '') +
-      '\n\nImportar os válidos?');
+    const ok = await confirmarAcao(
+      `${registros.length} lançamento(s) válido(s), ${erros.length} erro(s).\n\n` +
+      erros.slice(0, 5).join('\n') + (erros.length > 5 ? `\n... e mais ${erros.length - 5}` : ''),
+      { titulo: 'Importar lançamentos', textoOk: 'Importar válidos' }
+    );
     if (!ok) return;
   } else {
-    if (!confirm(`Importar ${registros.length} lançamento(s)?`)) return;
+    if (!(await confirmarAcao(`Importar ${registros.length} lançamento(s)?`, { titulo: 'Importar lançamentos', textoOk: 'Importar' }))) return;
   }
 
   let importados = 0;
@@ -3329,12 +3507,20 @@ async function importarLancamentosCSV(input) {
 }
 
 function baixarModeloLancamentos() {
-  const dados = [
-    ['data', 'debito', 'credito', 'descricao', 'valor'],
-    ['2026-01-31', 'Caixa e Equivalentes', 'Capital Social', 'Integralização de capital', 10000],
-    ['2026-02-10', 'Caixa e Equivalentes', 'Receita de Serviços', 'Prestação de serviços NF 001', 5000],
-    ['2026-02-20', 'Despesas com Salários', 'Caixa e Equivalentes', 'Pagamento de salários', 3500],
-  ];
+  // Monta o modelo com contas analíticas REAIS do plano carregado, pra planilha já
+  // importar sem "conta não encontrada".
+  const analiticas = CONTAS.filter(c => c.indCta !== 'S');
+  const pick = grp => analiticas.find(c => c.grupo === grp);
+  const caixa = pick('AC') || analiticas[0];
+  const capital = analiticas.find(c => c.grupo === 'PL') || pick('PC');
+  const receita = pick('REC');
+  const despesa = pick('DESP');
+  const hoje = new Date().toISOString().slice(0, 10);
+  const dados = [['data', 'debito', 'credito', 'descricao', 'valor']];
+  if (caixa && capital) dados.push([hoje, caixa.nome, capital.nome, 'Integralização de capital', 10000]);
+  if (caixa && receita) dados.push([hoje, caixa.nome, receita.nome, 'Prestação de serviços NF 001', 5000]);
+  if (caixa && despesa) dados.push([hoje, despesa.nome, caixa.nome, 'Pagamento de despesa', 3500]);
+  if (dados.length === 1) dados.push([hoje, '', '', 'Preencha com nomes de contas analíticas do seu plano', 0]);
   if (typeof XLSX !== 'undefined') {
     const ws = XLSX.utils.aoa_to_sheet(dados);
     ws['!cols'] = [{ wch: 12 }, { wch: 28 }, { wch: 28 }, { wch: 32 }, { wch: 12 }];
@@ -3369,7 +3555,7 @@ async function restaurarPadrao() {
   });
 
   if (paraRemover.length === 0) {
-    if (!confirm('Nenhuma conta será removida (todas são do padrão ou já têm lançamentos).\n\nDeseja apenas garantir que as contas padrão que faltam sejam adicionadas?')) return;
+    if (!(await confirmarAcao('Nenhuma conta será removida (todas são do padrão ou já têm lançamentos).\n\nDeseja apenas garantir que as contas padrão que faltam sejam adicionadas?', { titulo: 'Restaurar padrão', textoOk: 'Adicionar faltantes' }))) return;
   } else {
     const lista = paraRemover.slice(0, 15).map(c => `• ${c.chamada || c.codigo || '—'} — ${c.nome}`).join('\n');
     const aviso = `ATENÇÃO: isso vai APAGAR PERMANENTEMENTE ${paraRemover.length} conta(s) que não fazem parte do plano padrão e não têm lançamentos:\n\n${lista}${paraRemover.length > 15 ? `\n... e mais ${paraRemover.length - 15}` : ''}\n\nEssa ação NÃO pode ser desfeita.`;
