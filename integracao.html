@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
-<link rel="stylesheet" href="css/tokens.css?v=20261102c">
-<link rel="stylesheet" href="css/app.css?v=20261102c">
+<link rel="stylesheet" href="css/tokens.css?v=20261102d">
+<link rel="stylesheet" href="css/app.css?v=20261102d">
 </head>
 <body>
 <div class="app" id="app">
@@ -18,34 +18,23 @@
     <main class="lote" aria-label="Central de Integração">
       <div class="lote-head">
         <div>
-          <h1 class="pg-titulo">Central de Integração · Escrita Fiscal</h1>
-          <p class="muted pg-sub">As notas, apurações e guias do SisFiscal viram lançamentos pelos <b>lançamentos automáticos</b> configurados aqui (CFOP, serviço, tributo, retenção).
-            Confira antes de integrar: nota com pendência não entra.</p>
+          <h1 class="pg-titulo">Integração Fiscal</h1>
+          <p class="muted pg-sub">O SisFiscal manda o movimento de cada nota: data, código do <b>lançamento automático</b>, valor e cliente ou fornecedor.
+            Aqui você confere e escritura num lote por competência. As contas vêm do lançamento automático no plano de contas desta empresa.</p>
         </div>
       </div>
-
-      <div class="abas" role="tablist" aria-label="Partes da integração" id="abas">
-        <button role="tab" data-aba="integrar" aria-selected="true"><i class="ti ti-arrows-exchange"></i>Integrar</button>
-        <button role="tab" data-aba="cfop" aria-selected="false"><i class="ti ti-receipt"></i>CFOP</button>
-        <button role="tab" data-aba="servico" aria-selected="false"><i class="ti ti-briefcase"></i>Serviços</button>
-        <button role="tab" data-aba="tributo" aria-selected="false"><i class="ti ti-building-bank"></i>Tributos</button>
-        <button role="tab" data-aba="retencao" aria-selected="false"><i class="ti ti-receipt-tax"></i>Retenções</button>
-        <button role="tab" data-aba="geral" aria-selected="false"><i class="ti ti-settings"></i>Histórico</button>
-        <span class="sp"></span>
-        <button type="button" class="btn sm" id="novo-la"><i class="ti ti-bolt"></i>Novo lançamento automático</button>
-      </div>
-      <section class="aba-corpo" id="corpo" role="tabpanel"></section>
+      <section class="aba-corpo" id="corpo"></section>
     </main>
   </div>
 </div>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20261102c"></script>
-<script src="js/dados.js?v=20261102c"></script>
-<script src="js/inicio.js?v=20261102c"></script>
-<script src="js/layout.js?v=20261102c"></script>
-<script src="js/busca-conta.js?v=20261102c"></script>
-<script src="js/form-automatico.js?v=20261102c"></script>
-<script src="js/integracao.js?v=20261102c"></script>
+<script src="js/config.js?v=20261102d"></script>
+<script src="js/dados.js?v=20261102d"></script>
+<script src="js/inicio.js?v=20261102d"></script>
+<script src="js/layout.js?v=20261102d"></script>
+<script src="js/busca-conta.js?v=20261102d"></script>
+<script src="js/form-automatico.js?v=20261102d"></script>
+<script src="js/integracao.js?v=20261102d"></script>
 </body>
 </html>

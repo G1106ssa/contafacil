@@ -77,6 +77,7 @@
       else if (auto != null) {
         a = st.automaticos.find(x => x.cod === auto);
         if (!a) erros.push(`lançamento automático ${auto} não existe`);
+        else if (a.semPlano) { erros.push(`lançamento automático ${auto} não está configurado no plano desta empresa`); a = null; }
       }
 
       // débito e crédito: o que estiver na planilha vale; em branco, vem do automático
@@ -161,7 +162,7 @@
     cab.font = { bold: true, color: { argb: 'FFFFFFFF' } };
     cab.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A56A8' } }; });
     const d = (a, m, dia) => new Date(Date.UTC(a, m - 1, dia));
-    const ex = st.automaticos[0];
+    const ex = st.automaticos.find(a => !a.semPlano);
     [
       [d(2026, 2, 5), ex?.cod ?? null, null, null, 1500, null, 'NF 1101'],
       [d(2026, 2, 10), null, 127, 2, 398.5, 'Pagamento de energia elétrica referente a 01/2026', 'Fatura 90112'],
@@ -188,7 +189,7 @@
       ['Antes de gravar, o SisContábil confere linha por linha. Se alguma linha tiver erro, nada é gravado.', { italic: true }],
       ['', {}],
       ['Lançamentos automáticos cadastrados:', { bold: true }],
-      ...st.automaticos.map(a => [`${a.cod}  ${a.nome}  (D ${a.d} ${porCh.get(a.d)?.n || ''} / C ${a.c} ${porCh.get(a.c)?.n || ''})`, {}]),
+      ...st.automaticos.filter(a => !a.semPlano).map(a => [`${a.cod}  ${a.nome}  (D ${a.d != null ? `${a.d} ${porCh.get(a.d)?.n || ''}` : 'em aberto'} / C ${a.c != null ? `${a.c} ${porCh.get(a.c)?.n || ''}` : 'em aberto'})`, {}]),
     ].forEach(([t, f]) => { const r = info.addRow([t]); r.font = f; });
 
     window.Libs.baixar(await wb.xlsx.writeBuffer(), 'modelo_lancamentos_siscontabil.xlsx');

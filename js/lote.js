@@ -266,12 +266,15 @@
     const v = $('#f-auto').value.trim();
     if (!v) { $('#f-auto-nome').value = ''; erro('auto', ''); return; }
     const a = automaticos.find(x => x.cod === Number(v));
-    if (!a) { $('#f-auto-nome').value = ''; erro('auto', `Lançamento automático ${v} não existe (há: ${automaticos.map(x => x.cod).join(', ')})`); return; }
-    erro('auto', '');
+    if (!a) { $('#f-auto-nome').value = ''; erro('auto', `Lançamento automático ${v} não existe (há: ${automaticos.filter(x => !x.semPlano).map(x => x.cod).join(', ')})`); return; }
     $('#f-auto-nome').value = a.nome;
+    if (a.semPlano) { erro('auto', `O lançamento automático ${v} não está configurado no plano de contas desta empresa`); return; }
+    erro('auto', '');
+    // partida simples: o lado que o automático não tem fica como o usuário deixou
     if (!multiOn) {
-      $('#f-deb').value = a.d; atualizarConta($('#f-deb'));
-      $('#f-cre').value = a.c; atualizarConta($('#f-cre'));
+      if (a.d != null) { $('#f-deb').value = a.d; atualizarConta($('#f-deb')); }
+      if (a.c != null) { $('#f-cre').value = a.c; atualizarConta($('#f-cre')); }
+      if (a.d == null || a.c == null) toast(`Lançamento automático ${a.cod} só tem ${a.d != null ? 'débito' : 'crédito'}: o outro lado fica em aberto`);
     }
     // histórico = padrão do automático + complemento; só preenche se o usuário não escreveu o dele
     $('#f-hist-cod').value = a.hist ?? '';
@@ -286,7 +289,7 @@
 
   // F9: transforma as contas e o histórico digitados num lançamento automático novo
   async function criarAutomatico() {
-    if (multiOn) { toast('Lançamento automático liga uma conta de débito e uma de crédito: saia de Múltiplos'); return; }
+    if (multiOn) { toast('Lançamento automático liga uma conta de débito e/ou uma de crédito: saia de Múltiplos'); return; }
     const reg = await window.FormAutomatico.abrir(st, { preset: {
       d: $('#f-deb').value.trim(), c: $('#f-cre').value.trim(), hist: $('#f-hist-cod').value.trim(),
       texto: $('#f-hist-cod').value.trim() ? '' : $('#f-hist').value.trim(),
@@ -409,7 +412,7 @@
 
     if (!data) { ok = false; primeiroErro = $('#f-data'); toast('Informe a data'); }
     if (!hist) falha('hist', 'Informe o histórico', $('#f-hist')); else erro('hist', '');
-    if (auto != null && !automaticos.some(a => a.cod === auto)) falha('auto', 'Lançamento automático inexistente', $('#f-auto'));
+    if (auto != null && !automaticos.some(a => a.cod === auto && !a.semPlano)) falha('auto', 'Lançamento automático inexistente neste plano de contas', $('#f-auto'));
 
     if (!multiOn) {
       const v = parseMoney($('#f-valor').value);

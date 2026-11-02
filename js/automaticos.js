@@ -19,13 +19,22 @@
   function render() {
     const lista = visiveis();
     sel = Math.max(0, Math.min(sel, lista.length - 1));
-    $('#grid-body').innerHTML = lista.map((a, i) => `
+    const lado = ch => ch == null ? ['', '<span class="muted">em aberto</span>'] : [ch, esc(porCh.get(ch)?.n || '?')];
+    $('#grid-body').innerHTML = lista.map((a, i) => {
+      if (a.semPlano) return `
+      <tr data-i="${i}" aria-selected="${i === sel}" class="sem-plano">
+        <td class="num"><b>${a.cod}</b></td><td title="${esc(a.nome)}">${esc(a.nome)}</td>
+        <td colspan="5" class="muted"><i class="ti ti-alert-triangle"></i> Não configurado neste plano de contas (Enter para configurar)</td>
+        <td class="num">${usos(a.cod) || ''}</td></tr>`;
+      const [dch, dn] = lado(a.d), [cch, cn] = lado(a.c);
+      return `
       <tr data-i="${i}" aria-selected="${i === sel}">
         <td class="num"><b>${a.cod}</b></td><td title="${esc(a.nome)}">${esc(a.nome)}</td>
-        <td class="num d">${a.d}</td><td>${esc(porCh.get(a.d)?.n || '?')}</td>
-        <td class="num c">${a.c}</td><td>${esc(porCh.get(a.c)?.n || '?')}</td>
+        <td class="num d">${dch}</td><td>${dn}</td>
+        <td class="num c">${cch}</td><td>${cn}</td>
         <td title="${esc(histTexto(a))}">${a.hist ? `<span class="muted">${a.hist}</span> ` : ''}${esc(histTexto(a))}</td>
-        <td class="num">${usos(a.cod) || ''}</td></tr>`).join('');
+        <td class="num">${usos(a.cod) || ''}</td></tr>`;
+    }).join('');
     $('#grid-empty').hidden = st.automaticos.length > 0;
     $('#registros').textContent = filtro ? `Registros: ${lista.length} de ${st.automaticos.length}` : `Registros: ${st.automaticos.length}`;
     $('#t-editar').disabled = $('#t-excluir').disabled = !lista[sel];
@@ -59,10 +68,10 @@
     const a = visiveis()[sel];
     if (!a) return;
     const n = usos(a.cod);
-    const msg = `Excluir o lançamento automático ${a.cod} (${a.nome})?` +
+    const msg = `Excluir o lançamento automático ${a.cod} (${a.nome}) deste plano de contas?` +
       (n ? ` Ele é usado em ${n} lançamento${n > 1 ? 's' : ''}: esses lançamentos continuam com as contas e o histórico, só perdem o vínculo.` : '');
     if (!(await confirmar(msg))) return;
-    try { await window.Dados.excluirAutomatico(a.id); }    // no banco, os lançamentos só perdem o vínculo
+    try { await window.Dados.excluirAutomatico(st, a.id); }    // no banco, os lançamentos só perdem o vínculo
     catch (e) { window.Layout.toast(e.message); return; }
     st.automaticos.splice(st.automaticos.indexOf(a), 1);
     for (const lo of st.lotes) for (const l of lo.lancs) if (l.auto === a.cod) l.auto = null;

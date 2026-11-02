@@ -1,5 +1,6 @@
 // Formulário de lançamento automático (cadastro e F9 no lançamento).
-// Um código único liga a conta de débito, a de crédito e o histórico. Contas pela chamada (F2 = plano).
+// Um código único (do escritório) liga, em cada plano de contas, a conta devedora e/ou a credora e o
+// histórico. Só um lado = partida simples. Contas pela chamada (F2 = plano).
 (() => {
   'use strict';
   // contas por chamada, do plano da empresa (carregado depois do login)
@@ -15,7 +16,7 @@
 
   function conta(txt) {
     txt = String(txt ?? '').trim();
-    if (!txt) return { erro: 'Informe a chamada (F2 abre o plano)' };
+    if (!txt) return { vazia: true };
     if (!/^\d+$/.test(txt)) return { erro: 'Digite a chamada da conta (F2 abre o plano)' };
     const c = porCh.get(Number(txt));
     if (!c) return { erro: `Chamada ${txt} não existe` };
@@ -35,12 +36,13 @@
             <div class="field"><label for="a-cod">Código</label><input class="input code" id="a-cod" inputmode="numeric" aria-describedby="ae-cod"><div class="err" id="ae-cod"></div></div>
             <div class="field" style="flex:1"><label for="a-nome">Descrição</label><input class="input" id="a-nome" placeholder="Ex.: Pagamento de aluguel" aria-describedby="ae-nome"><div class="err" id="ae-nome"></div></div>
           </div>
-          <div class="field"><label for="a-deb">Conta devedora</label>
+          <div class="auto-plano" id="a-plano"></div>
+          <div class="field"><label for="a-deb">Chamada devedora</label>
             <div class="combo"><input class="input code debit" id="a-deb" data-chamada inputmode="numeric" aria-describedby="ae-deb">
               <button type="button" class="btn icon sm" data-busca="a-deb" aria-label="Abrir plano de contas (F2)"><i class="ti ti-search"></i></button>
               <input class="input name" id="a-deb-nome" readonly tabindex="-1" aria-label="Nome da conta devedora"></div>
             <div class="err" id="ae-deb"></div></div>
-          <div class="field"><label for="a-cre">Conta credora</label>
+          <div class="field"><label for="a-cre">Chamada credora</label>
             <div class="combo"><input class="input code credit" id="a-cre" data-chamada inputmode="numeric" aria-describedby="ae-cre">
               <button type="button" class="btn icon sm" data-busca="a-cre" aria-label="Abrir plano de contas (F2)"><i class="ti ti-search"></i></button>
               <input class="input name" id="a-cre-nome" readonly tabindex="-1" aria-label="Nome da conta credora"></div>
@@ -50,6 +52,8 @@
             <div class="err" id="ae-hist"></div></div>
           <div class="field"><label for="a-texto">Complemento do histórico <span class="muted">(opcional)</span></label>
             <input class="input" id="a-texto" placeholder="Texto que vem depois do histórico padrão"></div>
+          <div class="field"><label for="a-obs">Observações <span class="muted">(opcional)</span></label>
+            <input class="input" id="a-obs"></div>
           <div class="auto-resumo" id="a-resumo" aria-live="polite"></div>
         </div>
         <div class="hint"><kbd>Enter</kbd> próximo campo · <kbd>F2</kbd> plano de contas · <kbd>Ctrl+Enter</kbd> gravar · <kbd>Esc</kbd> cancelar</div>
@@ -101,9 +105,10 @@
     const d = conta($('#a-deb', dlg).value).conta, c = conta($('#a-cre', dlg).value).conta;
     const h = st.historicos.find(x => x.cod === Number($('#a-hist', dlg).value));
     const texto = [h?.texto, $('#a-texto', dlg).value.trim()].filter(Boolean).join(' ');
+    const lado = (letra, conta) => conta ? `${letra} ${conta.ch} ${esc(conta.n)}` : `${letra} <i>em aberto</i>`;
     $('#a-resumo', dlg).innerHTML = `<i class="ti ti-bolt"></i> Digitando <b>${esc(cod)}</b> em "L. Auto." o lote preenche:
-      <span class="d">D ${d ? `${d.ch} ${esc(d.n)}` : '—'}</span> · <span class="c">C ${c ? `${c.ch} ${esc(c.n)}` : '—'}</span>
-      · histórico "${esc(texto || '—')}"`;
+      <span class="d">${lado('D', d)}</span> · <span class="c">${lado('C', c)}</span>
+      · histórico "${esc(texto || '—')}"${d && c ? '' : (d || c ? ' <span class="muted">(partida simples: o outro lado você digita ou vem de outro lançamento)</span>' : '')}`;
   }
 
   async function gravar() {
@@ -123,6 +128,7 @@
     const d = conta($('#a-deb', dlg).value), c = conta($('#a-cre', dlg).value);
     if (d.erro) falha('deb', d.erro);
     if (c.erro) falha('cre', c.erro);
+    if (d.vazia && c.vazia) falha('deb', 'Informe a chamada devedora, a credora ou as duas');
     if (d.conta && c.conta && d.conta.ch === c.conta.ch) falha('cre', 'Débito e crédito na mesma conta');
     const histTxt = $('#a-hist', dlg).value.trim();
     const hist = histTxt ? Number(histTxt) : null;
@@ -132,7 +138,7 @@
 
     if (!ok) { primeiro?.focus(); return; }
 
-    const reg = { cod, nome, d: d.conta.ch, c: c.conta.ch, hist, texto };
+    const reg = { cod, nome, d: d.conta?.ch ?? null, c: c.conta?.ch ?? null, hist, texto, obs: $('#a-obs', dlg).value.trim(), semPlano: false };
     const botao = $('#a-gravar', dlg);
     botao.disabled = true;
     try {
@@ -156,8 +162,12 @@
     editando = registro;
     const base = registro || preset;
     const proximo = Math.max(0, ...st.automaticos.map(a => a.cod)) + 1;
-    $('#auto-titulo', dlg).textContent = registro ? `Editar lançamento automático ${registro.cod}` : 'Novo lançamento automático';
-    $('#a-cod', dlg).value = registro ? registro.cod : proximo;
+    $('#auto-titulo', dlg).textContent = !registro ? 'Novo lançamento automático'
+      : registro.semPlano ? `Configurar o lançamento automático ${registro.cod} neste plano` : `Editar lançamento automático ${registro.cod}`;
+    const pl = st.planoAtual;
+    $('#a-plano', dlg).innerHTML = `<i class="ti ti-list-tree"></i> Plano de contas <b>${esc(pl?.codigo || '')}</b> ${esc(pl?.nome || '')}
+      <span class="muted">· as chamadas abaixo valem para este plano</span>`;
+    $('#a-cod', dlg).value = registro ? registro.cod : (preset.cod ?? proximo);
     $('#a-cod', dlg).readOnly = !!registro;          // o código não muda depois de criado
     $('#a-cod', dlg).title = registro ? 'O código não muda depois de criado' : '';
     $('#a-nome', dlg).value = base.nome || '';
@@ -165,11 +175,12 @@
     $('#a-cre', dlg).value = base.c ?? '';
     $('#a-hist', dlg).value = base.hist ?? '';
     $('#a-texto', dlg).value = base.texto || '';
+    $('#a-obs', dlg).value = base.obs || '';
     ['#a-deb', '#a-cre', '#a-hist'].forEach(id => $(id, dlg).dispatchEvent(new Event('input')));
     ['cod', 'nome', 'deb', 'cre', 'hist'].forEach(k => erro(k, ''));
     resumo();
     dlg.showModal();
-    (registro || preset.d ? $('#a-nome', dlg) : $('#a-cod', dlg)).focus();
+    (registro ? (registro.semPlano ? $('#a-deb', dlg) : $('#a-nome', dlg)) : preset.d || preset.cod ? $('#a-nome', dlg) : $('#a-cod', dlg)).focus();
     return new Promise(ok => { resolver = ok; });
   }
 
