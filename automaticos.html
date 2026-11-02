@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SisContábil — Lançamentos automáticos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="css/tokens.css?v=20261102a">
+<link rel="stylesheet" href="css/app.css?v=20261102a">
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="topbar" id="topbar"></header>
+    <main class="lote" aria-label="Lançamentos automáticos">
+      <div class="lote-head">
+        <div>
+          <h1 class="pg-titulo">Lançamentos automáticos</h1>
+          <p class="muted pg-sub">Cada código liga uma conta de débito, uma de crédito e o histórico. No lote, digite o código em "L. Auto." e as duas pontas se preenchem.</p>
+        </div>
+      </div>
+
+      <div class="toolbar" role="toolbar" aria-label="Ações">
+        <div class="group">
+          <button class="tool" id="t-novo" aria-keyshortcuts="Insert" title="Novo (Insert)"><i class="ti ti-file-plus"></i>Novo</button>
+          <button class="tool" id="t-editar" aria-keyshortcuts="Enter" title="Editar (Enter)"><i class="ti ti-pencil"></i>Editar</button>
+          <button class="tool" id="t-excluir" aria-keyshortcuts="Delete" title="Excluir (Delete)"><i class="ti ti-trash"></i>Excluir</button>
+        </div>
+        <div class="group">
+          <button class="tool" id="t-localizar" aria-keyshortcuts="Control+F" title="Localizar (Ctrl+F)"><i class="ti ti-search"></i>Localizar</button>
+        </div>
+      </div>
+
+      <div class="findbar" id="findbar">
+        <label class="sr-only" for="find">Localizar</label>
+        <input class="input" id="find" placeholder="Localizar por código, descrição, chamada ou conta">
+        <button class="btn sm" id="find-close">Fechar</button>
+      </div>
+
+      <div class="grid-wrap">
+        <table class="grid" id="grid" tabindex="0" aria-label="Lançamentos automáticos">
+          <thead><tr>
+            <th scope="col" class="num">Código</th><th scope="col">Descrição</th>
+            <th scope="col" class="num">Débito</th><th scope="col">Conta débito</th>
+            <th scope="col" class="num">Crédito</th><th scope="col">Conta crédito</th>
+            <th scope="col">Histórico</th><th scope="col" class="num">Usos</th>
+          </tr></thead>
+          <tbody id="grid-body"></tbody>
+        </table>
+        <div class="empty" id="grid-empty" hidden><i class="ti ti-bolt"></i>Nenhum lançamento automático. Tecle <b>Insert</b> para criar o primeiro.</div>
+      </div>
+      <div class="grid-foot"><span id="registros"></span><span class="muted">Usos = lançamentos da prévia que usam o código</span></div>
+    </main>
+  </div>
+</div>
+
+<dialog id="dlg-confirm" aria-labelledby="conf-titulo">
+  <div class="dlg-head"><i class="ti ti-alert-triangle"></i><h2 id="conf-titulo">Confirmar</h2></div>
+  <div class="dlg-body"><p id="conf-msg"></p></div>
+  <div class="dlg-foot"><button class="btn" id="conf-nao">Cancelar</button><button class="btn primary" id="conf-sim">Excluir</button></div>
+</dialog>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="js/config.js?v=20261102a"></script>
+<script src="js/dados.js?v=20261102a"></script>
+<script src="js/inicio.js?v=20261102a"></script>
+<script src="js/layout.js?v=20261102a"></script>
+<script src="js/busca-conta.js?v=20261102a"></script>
+<script src="js/form-automatico.js?v=20261102a"></script>
+<script src="js/automaticos.js?v=20261102a"></script>
+</body>
+</html>

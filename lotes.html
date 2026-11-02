@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SisContábil — Lotes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="css/tokens.css?v=20261102a">
+<link rel="stylesheet" href="css/app.css?v=20261102a">
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="topbar" id="topbar"></header>
+    <main class="lote" aria-label="Lotes de lançamentos">
+      <div class="lote-head">
+        <div>
+          <h1 class="pg-titulo">Lotes</h1>
+          <p class="muted pg-sub">Cada lote agrupa lançamentos (folha do mês, despesas, notas...). Só lote liberado entra no saldo e nos livros.</p>
+        </div>
+        <div class="sp" style="flex:1"></div>
+        <div class="field"><label for="f-sit">Situação</label>
+          <select class="input" id="f-sit">
+            <option value="todos">Todos</option><option value="abertos">A liberar</option><option value="liberados">Liberados</option>
+          </select></div>
+      </div>
+
+      <div class="toolbar" role="toolbar" aria-label="Ações dos lotes">
+        <div class="group">
+          <button class="tool" id="t-novo" aria-keyshortcuts="Insert" title="Novo lote (Insert)"><i class="ti ti-folder-plus"></i>Novo lote</button>
+          <button class="tool" id="t-abrir" aria-keyshortcuts="Enter" title="Abrir o lote (Enter)"><i class="ti ti-folder-open"></i>Abrir</button>
+        </div>
+        <div class="group">
+          <button class="tool" id="t-liberar" title="Liberar o lote para o movimento"><i class="ti ti-lock-check"></i>Liberar</button>
+          <button class="tool" id="t-reabrir" title="Reabrir lote liberado"><i class="ti ti-lock-open"></i>Reabrir</button>
+          <button class="tool" id="t-localizar" aria-keyshortcuts="Control+F" title="Localizar (Ctrl+F)"><i class="ti ti-search"></i>Localizar</button>
+          <button class="tool" id="t-expandir" title="Mostrar ou esconder os lançamentos de todos os lotes"><i class="ti ti-fold-down"></i>Expandir todos</button>
+        </div>
+        <div class="group">
+          <button class="tool danger" id="t-apagar" aria-keyshortcuts="Delete" title="Apagar o lote (Delete)"><i class="ti ti-trash-x"></i>Apagar lote</button>
+        </div>
+      </div>
+
+      <div class="findbar" id="findbar">
+        <label class="sr-only" for="find">Localizar</label>
+        <input class="input" id="find" placeholder="Localizar por código, nome ou data">
+        <button class="btn sm" id="find-close">Fechar</button>
+      </div>
+
+      <div class="grid-wrap">
+        <table class="grid" id="grid" tabindex="0" aria-label="Lotes">
+          <thead><tr>
+            <th scope="col">Lote</th><th scope="col">Nome</th><th scope="col">Data</th><th scope="col">Situação</th>
+            <th scope="col" class="num">Lançamentos</th><th scope="col" class="num">Débito</th>
+            <th scope="col" class="num">Crédito</th><th scope="col" class="num">Diferença</th>
+          </tr></thead>
+          <tbody id="grid-body"></tbody>
+        </table>
+        <div class="empty" id="grid-empty" hidden><i class="ti ti-folder-plus"></i>Nenhum lote. Tecle <b>Insert</b> para criar o primeiro.</div>
+      </div>
+      <div class="grid-foot"><span id="registros"></span><span class="muted">Clique ou → mostra os lançamentos · ← recolhe · Enter ou duplo clique entra no lote</span></div>
+    </main>
+  </div>
+</div>
+
+<dialog id="dlg-lote" aria-labelledby="nl-titulo">
+  <form method="dialog" novalidate>
+    <div class="dlg-head"><i class="ti ti-folder-plus"></i><h2 id="nl-titulo">Novo lote</h2></div>
+    <div class="dlg-body">
+      <div class="auto-top">
+        <div class="field"><label for="nl-cod">Lote</label><input class="input code" id="nl-cod" readonly title="Gerado em sequência"></div>
+        <div class="field"><label for="nl-data">Data do lote</label><input class="input" type="date" id="nl-data"><div class="err" id="ne-data"></div></div>
+      </div>
+      <div class="field"><label for="nl-nome">Nome do lote</label>
+        <input class="input" id="nl-nome" placeholder="Ex.: Folha de pagamento de janeiro/2026" aria-describedby="ne-nome"><div class="err" id="ne-nome"></div></div>
+      <div class="sugestoes" id="nl-sug" aria-label="Sugestões de nome"></div>
+    </div>
+    <div class="hint"><kbd>Enter</kbd> cria e abre o lote · <kbd>Esc</kbd> cancela</div>
+    <div class="dlg-foot">
+      <button type="button" class="btn" id="nl-cancelar"><i class="ti ti-x"></i>Cancelar</button>
+      <button type="button" class="btn primary" id="nl-criar"><i class="ti ti-check"></i>Criar e abrir</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-confirm" aria-labelledby="conf-titulo">
+  <div class="dlg-head"><i class="ti ti-alert-triangle"></i><h2 id="conf-titulo">Confirmar</h2></div>
+  <div class="dlg-body"><p id="conf-msg"></p>
+    <div class="field" id="conf-wrap" hidden><label for="conf-txt">Digite CONFIRMA</label><input class="input" id="conf-txt" autocomplete="off"></div></div>
+  <div class="dlg-foot"><button class="btn" id="conf-nao">Cancelar</button><button class="btn primary" id="conf-sim">Confirmar</button></div>
+</dialog>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="js/config.js?v=20261102a"></script>
+<script src="js/dados.js?v=20261102a"></script>
+<script src="js/inicio.js?v=20261102a"></script>
+<script src="js/layout.js?v=20261102a"></script>
+<script src="js/lotes.js?v=20261102a"></script>
+</body>
+</html>

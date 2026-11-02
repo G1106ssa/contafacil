@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SisContábil — Entrar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="css/tokens.css?v=20261102a">
+<link rel="stylesheet" href="css/app.css?v=20261102a">
+</head>
+<body>
+<main class="tela-entrar">
+  <form class="caixa-entrar" id="form" novalidate>
+    <div class="marca"><i class="ti ti-calculator" style="color:var(--accent)"></i> Sis<b>Contábil</b></div>
+    <p class="sub">Use o mesmo e-mail e senha do SisFiscal</p>
+    <div class="field"><label for="email">E-mail</label><input class="input" id="email" type="email" autocomplete="username" required></div>
+    <div class="field"><label for="senha">Senha</label><input class="input" id="senha" type="password" autocomplete="current-password" required></div>
+    <div class="aviso-erro" id="erro" role="alert"></div>
+    <button class="btn primary" id="entrar" type="submit"><i class="ti ti-login"></i>Entrar</button>
+  </form>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="js/config.js?v=20261102a"></script>
+<script src="js/dados.js?v=20261102a"></script>
+<script src="js/layout.js?v=20261102a"></script>
+<script>
+(async () => {
+  'use strict';
+  window.Layout.aplicarTema(null);
+  const volta = new URLSearchParams(location.search).get('volta');
+  // só volta para uma tela do próprio sistema
+  const destino = volta && /^[a-z]+\.html(\?[\w=&%.-]*)?$/.test(volta) ? volta : 'lotes.html';
+  if (await window.Dados.sessao()) { location.replace(destino); return; }
+  const $ = s => document.querySelector(s);
+  $('#email').focus();
+  $('#form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const email = $('#email').value.trim(), senha = $('#senha').value;
+    if (!email || !senha) { $('#erro').textContent = 'Informe e-mail e senha'; return; }
+    $('#entrar').disabled = true;
+    $('#erro').textContent = '';
+    try {
+      await window.Dados.entrar(email, senha);
+      location.replace(destino);
+    } catch (err) {
+      $('#erro').textContent = err.message;
+      $('#entrar').disabled = false;
+      $('#senha').select();
+    }
+  });
+})();
+</script>
+</body>
+</html>

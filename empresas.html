@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SisContábil — Empresas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="css/tokens.css?v=20261102a">
+<link rel="stylesheet" href="css/app.css?v=20261102a">
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="topbar" id="topbar"></header>
+    <main class="lote" aria-label="Empresas">
+      <div class="lote-head">
+        <div>
+          <h1 class="pg-titulo">Empresas</h1>
+          <p class="muted pg-sub">As empresas vêm do SisFiscal. Para escriturar uma delas aqui, ative no contábil: ela recebe o plano de contas padrão do escritório.</p>
+        </div>
+      </div>
+      <div class="grid-wrap">
+        <table class="grid" id="grid" tabindex="0" aria-label="Empresas">
+          <thead><tr><th scope="col">Razão social</th><th scope="col">CNPJ</th><th scope="col">Regime</th>
+            <th scope="col">No contábil</th><th scope="col"></th></tr></thead>
+          <tbody id="grid-body"></tbody>
+        </table>
+        <div class="empty" id="grid-empty" hidden><i class="ti ti-building"></i>Nenhuma empresa no seu escritório. Cadastre as empresas no SisFiscal.</div>
+      </div>
+      <div class="grid-foot"><span id="registros"></span></div>
+    </main>
+  </div>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="js/config.js?v=20261102a"></script>
+<script src="js/dados.js?v=20261102a"></script>
+<script src="js/inicio.js?v=20261102a"></script>
+<script src="js/layout.js?v=20261102a"></script>
+<script>
+(async () => {
+  'use strict';
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const REGIME = { mei: 'MEI', simples: 'Simples Nacional', presumido: 'Lucro Presumido', real: 'Lucro Real' };
+  const { ctx } = await window.Inicio.pronto({ precisaEmpresa: false });
+  window.Layout.montar({ pagina: 'empresas', crumb: 'Cadastros › <b>Empresas</b>', ctx });
+
+  function render() {
+    $('#grid-body').innerHTML = ctx.empresas.map(e => `
+      <tr${ctx.empresa?.id === e.id ? ' aria-selected="true"' : ''}>
+        <td><b>${esc(e.razao_social)}</b>${e.nome_fantasia ? ` <span class="muted">· ${esc(e.nome_fantasia)}</span>` : ''}</td>
+        <td class="mono">${esc(e.cnpjFmt)}</td><td>${esc(REGIME[e.regime] || e.regime)}</td>
+        <td>${e.ativada ? '<span class="chip success"><i class="ti ti-check"></i>Ativada</span>' : '<span class="muted">Não ativada</span>'}</td>
+        <td class="num">${e.ativada
+          ? `<button class="btn sm primary" data-abrir="${e.id}"><i class="ti ti-arrow-right"></i>${ctx.empresa?.id === e.id ? 'Empresa atual' : 'Abrir'}</button>`
+          : (ctx.podeEditar ? `<button class="btn sm" data-ativar="${e.id}"><i class="ti ti-plus"></i>Ativar no contábil</button>` : '<span class="muted">peça a um analista</span>')}</td>
+      </tr>`).join('');
+    $('#grid-empty').hidden = ctx.empresas.length > 0;
+    $('#registros').textContent = `Empresas: ${ctx.empresas.length} · ${ctx.empresas.filter(e => e.ativada).length} ativadas no contábil`;
+  }
+  $('#grid-body').addEventListener('click', async e => {
+    const abrir = e.target.closest('[data-abrir]'), ativar = e.target.closest('[data-ativar]');
+    if (abrir) { window.Dados.escolherEmpresa(abrir.dataset.abrir); location.href = 'lotes.html'; }
+    if (ativar) {
+      const emp = ctx.empresas.find(x => x.id === ativar.dataset.ativar);
+      ativar.disabled = true;
+      ativar.innerHTML = '<i class="ti ti-loader"></i>Ativando…';
+      try {
+        await window.Dados.ativarEmpresa(emp.id);
+        emp.ativada = true;
+        window.Layout.toast(`${emp.razao_social} ativada no contábil, com o plano de contas padrão`);
+        window.Dados.escolherEmpresa(emp.id);
+        location.href = 'lotes.html';
+      } catch (err) {
+        window.Layout.toast(err.message);
+        render();
+      }
+    }
+  });
+  render();
+})();
+</script>
+</body>
+</html>

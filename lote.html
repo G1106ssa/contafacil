@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SisContábil — Lote</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="css/tokens.css?v=20261102a">
+<link rel="stylesheet" href="css/app.css?v=20261102a">
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main">
+    <header class="topbar" id="topbar"></header>
+
+    <main class="lote" aria-label="Lote de lançamentos">
+      <div class="lote-head">
+        <div class="emp" id="lote-emp"></div>
+        <div class="field"><label for="lote-cod">Lote</label><input class="input code" id="lote-cod" readonly></div>
+        <div class="field lote-nome"><label for="lote-nome">Nome do lote</label><input class="input" id="lote-nome"></div>
+        <div class="field"><label for="lote-data">Data do lote</label><input class="input" type="date" id="lote-data"></div>
+        <span class="chip warning" id="situacao"><i class="ti ti-clock"></i>A liberar</span>
+      </div>
+
+      <div class="toolbar" role="toolbar" aria-label="Ações do lote">
+        <div class="group">
+          <button class="tool" id="t-novo" aria-keyshortcuts="Insert" title="Novo lançamento (Insert)"><i class="ti ti-file-plus"></i>Novo</button>
+          <button class="tool" id="t-editar" aria-keyshortcuts="Enter" title="Editar (Enter)"><i class="ti ti-pencil"></i>Editar</button>
+          <button class="tool" id="t-excluir" aria-keyshortcuts="Delete" title="Excluir (Delete)"><i class="ti ti-trash"></i>Excluir</button>
+          <button class="tool" id="t-importar" title="Importar lançamentos de planilha Excel"><i class="ti ti-file-import"></i>Importar</button>
+        </div>
+        <div class="group">
+          <button class="tool" id="t-liberar" title="Liberar o lote para o movimento"><i class="ti ti-lock-check"></i>Liberar</button>
+          <button class="tool" id="t-reabrir" title="Reabrir lote liberado" disabled><i class="ti ti-lock-open"></i>Reabrir</button>
+          <button class="tool" id="t-localizar" aria-keyshortcuts="Control+F" title="Localizar (Ctrl+F)"><i class="ti ti-search"></i>Localizar</button>
+          <button class="tool" id="t-fechar" title="Fechar o lote e voltar à lista de lotes"><i class="ti ti-folder"></i>Fechar</button>
+        </div>
+        <div class="group">
+          <button class="tool" id="t-imprimir" title="Imprimir"><i class="ti ti-printer"></i>Imprimir</button>
+          <button class="tool" id="t-recalcular" title="Recalcular totais"><i class="ti ti-calculator"></i>Recalcular</button>
+          <button class="tool danger" id="t-apagar" title="Apagar o lote inteiro"><i class="ti ti-trash-x"></i>Apagar lote</button>
+        </div>
+      </div>
+
+      <div class="findbar" id="findbar">
+        <label class="sr-only" for="find">Localizar</label>
+        <input class="input" id="find" placeholder="Localizar por histórico, documento, conta ou valor">
+        <button class="btn sm" id="find-close">Fechar</button>
+      </div>
+
+      <div class="grid-wrap">
+        <table class="grid" id="grid" tabindex="0" aria-label="Lançamentos do lote" aria-multiselectable="false">
+          <thead><tr>
+            <th scope="col">Nº</th><th scope="col">Data</th><th scope="col">L. Auto.</th>
+            <th scope="col">Débito</th><th scope="col">Conta débito</th>
+            <th scope="col">Crédito</th><th scope="col">Conta crédito</th>
+            <th scope="col">Histórico</th><th scope="col" class="num">Valor</th>
+          </tr></thead>
+          <tbody id="grid-body"></tbody>
+        </table>
+        <div class="empty" id="grid-empty" hidden><i class="ti ti-file-plus"></i>Nenhum lançamento neste lote. Tecle <b>Insert</b> para lançar.</div>
+      </div>
+      <div class="grid-foot">
+        <span id="registros">Registros: 0</span>
+        <span id="eq" class="eq" aria-live="polite"></span>
+      </div>
+
+      <div class="detail">
+        <div class="field"><label for="det-doc">Documento</label><input class="input" id="det-doc" readonly></div>
+        <div class="field"><label for="det-hist">Histórico</label><input class="input" id="det-hist" readonly></div>
+      </div>
+
+      <section class="totais" aria-labelledby="tot-titulo">
+        <h2 id="tot-titulo">Totais do lote</h2>
+        <div class="tot-grid" id="tot-grid" aria-live="polite"></div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- janela de lançamento -->
+<dialog id="dlg-lanc" aria-labelledby="lanc-titulo">
+  <form method="dialog" id="form-lanc" novalidate>
+    <div class="dlg-head"><i class="ti ti-file-plus"></i><h2 id="lanc-titulo">Novo lançamento</h2>
+      <button type="button" class="btn sm" id="btn-multi" aria-pressed="false">Múltiplos</button></div>
+    <div class="dlg-body">
+      <div class="lanc-grid">
+        <div style="display:grid;gap:6px">
+          <div class="row2">
+            <div class="field"><label for="f-data">Data</label><input class="input" type="date" id="f-data" required></div>
+            <div class="field single" id="wrap-valor"><label for="f-valor">Valor</label><input class="input money" id="f-valor" inputmode="decimal" placeholder="0,00"><div class="err" id="e-valor"></div></div>
+          </div>
+          <div class="field"><label for="f-auto">Lançamento automático</label>
+            <div class="combo"><input class="input code" id="f-auto" inputmode="numeric"><input class="input name" id="f-auto-nome" readonly tabindex="-1" aria-label="Nome do lançamento automático"></div>
+            <div class="err" id="e-auto"></div></div>
+          <div class="single" id="wrap-contas" style="display:grid;gap:6px">
+            <div class="field"><label for="f-deb">Conta devedora</label>
+              <div class="combo"><input class="input code debit" id="f-deb" data-conta="D" data-chamada inputmode="numeric" aria-describedby="e-deb">
+                <button type="button" class="btn icon sm" data-pick="f-deb" aria-label="Buscar conta devedora (F2)"><i class="ti ti-search"></i></button>
+                <input class="input name" id="f-deb-nome" readonly tabindex="-1" aria-label="Nome da conta devedora"></div>
+              <div class="err" id="e-deb"></div></div>
+            <div class="field"><label for="f-cre">Conta credora</label>
+              <div class="combo"><input class="input code credit" id="f-cre" data-conta="C" data-chamada inputmode="numeric" aria-describedby="e-cre">
+                <button type="button" class="btn icon sm" data-pick="f-cre" aria-label="Buscar conta credora (F2)"><i class="ti ti-search"></i></button>
+                <input class="input name" id="f-cre-nome" readonly tabindex="-1" aria-label="Nome da conta credora"></div>
+              <div class="err" id="e-cre"></div></div>
+          </div>
+          <div class="multi" id="multi">
+            <table><thead><tr><th>Conta</th><th></th><th>Nome</th><th>D/C</th><th class="num">Valor</th><th></th></tr></thead><tbody id="multi-body"></tbody></table>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <button type="button" class="btn sm" id="multi-add"><i class="ti ti-plus"></i>Partida</button>
+              <span id="multi-dif" class="eq"></span>
+            </div>
+            <div class="err" id="e-multi"></div>
+          </div>
+        </div>
+        <div class="saldo-box single" id="saldos" aria-label="Saldos das contas no lote">
+          <span class="label">Saldo no lote</span>
+          <div class="s"><span>Devedora</span><b id="s-deb">—</b></div>
+          <button type="button" class="btn sm" disabled title="Disponível com o banco de dados">Movimentos</button>
+          <div class="s"><span>Credora</span><b id="s-cre">—</b></div>
+          <button type="button" class="btn sm" disabled title="Disponível com o banco de dados">Movimentos</button>
+        </div>
+      </div>
+      <div class="field"><label for="f-hist-cod">Histórico padrão</label>
+        <div class="combo"><input class="input code" id="f-hist-cod" inputmode="numeric"><span class="muted" id="f-hist-dica" style="font-size:12px"></span></div></div>
+      <div class="field"><label for="f-hist">Histórico</label><textarea class="input" id="f-hist" rows="2" aria-describedby="e-hist"></textarea><div class="err" id="e-hist"></div></div>
+      <div class="field" style="max-width:240px"><label for="f-doc">Documento</label><input class="input" id="f-doc" placeholder="NF, recibo, cheque..."></div>
+    </div>
+    <div class="hint"><kbd>Enter</kbd> próximo campo · <kbd>F2</kbd> plano de contas · <kbd>F9</kbd> criar lançamento automático com as contas acima · <kbd>Ctrl+Enter</kbd> gravar · <kbd>Esc</kbd> cancelar</div>
+    <div class="dlg-foot">
+      <button type="button" class="btn" id="lanc-cancelar"><i class="ti ti-x"></i>Cancelar</button>
+      <button type="button" class="btn primary" id="lanc-gravar"><i class="ti ti-check"></i>Gravar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- confirmação -->
+<dialog id="dlg-confirm" aria-labelledby="conf-titulo">
+  <div class="dlg-head"><i class="ti ti-alert-triangle"></i><h2 id="conf-titulo">Confirmar</h2></div>
+  <div class="dlg-body"><p id="conf-msg"></p>
+    <div class="field" id="conf-wrap" hidden><label for="conf-txt">Digite CONFIRMA</label><input class="input" id="conf-txt" autocomplete="off"></div></div>
+  <div class="dlg-foot"><button class="btn" id="conf-nao">Cancelar</button><button class="btn primary" id="conf-sim">Confirmar</button></div>
+</dialog>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="js/config.js?v=20261102a"></script>
+<script src="js/dados.js?v=20261102a"></script>
+<script src="js/inicio.js?v=20261102a"></script>
+<script src="js/layout.js?v=20261102a"></script>
+<script src="js/busca-conta.js?v=20261102a"></script>
+<script src="js/form-automatico.js?v=20261102a"></script>
+<script src="js/libs.js?v=20261102a"></script>
+<script src="js/importar-excel.js?v=20261102a"></script>
+<script src="js/lote.js?v=20261102a"></script>
+</body>
+</html>

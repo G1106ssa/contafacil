@@ -1,0 +1,106 @@
+/* GERADO por replica/design/gerar_tokens_css.py — não editar à mão. */
+:root {
+  --bg: #eef0f3;
+  --surface: #ffffff;
+  --surface-2: #f6f7f9;
+  --header: #e6e9ee;
+  --row-hover: #eef3fa;
+  --row-selected: #dce7f6;
+  --border: #d0d4dc;
+  --border-input: #858d9b;
+  --text: #1a1d23;
+  --text-muted: #5a6170;
+  --accent: #1a56a8;
+  --accent-hover: #144a8f;
+  --on-accent: #ffffff;
+  --focus: #1a56a8;
+  --debit: #1a56a8;
+  --credit: #b42020;
+  --danger: #b42020;
+  --success: #17703c;
+  --warning: #9a4a07;
+  --hint-bg: #fff8db;
+  --hint-text: #5c4400;
+  --font-sans: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --font-mono: ui-monospace, Consolas, Menlo, monospace;
+  --text-xs: 11px/14px;  --weight-xs: 500;
+  --text-sm: 12px/16px;  --weight-sm: 400;
+  --text-base: 13px/18px;  --weight-base: 400;
+  --text-md: 14px/20px;  --weight-md: 600;
+  --text-lg: 16px/22px;  --weight-lg: 600;
+  --text-xl: 20px/26px;  --weight-xl: 700;
+  --space-0: 0px;
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 24px;
+  --space-8: 32px;
+  --size-control: 28px;
+  --size-control-sm: 24px;
+  --size-row: 26px;
+  --size-toolbar: 56px;
+  --size-sidebar: 220px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(16,24,40,.06);
+  --shadow-pop: 0 10px 30px rgba(16,24,40,.18);
+  --motion-fast: 100ms;
+  --motion-base: 160ms;
+  --ease: cubic-bezier(.2,.8,.2,1);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #16191f;
+    --surface: #1f232b;
+    --surface-2: #262b34;
+    --header: #2b303a;
+    --row-hover: #262d38;
+    --row-selected: #22344c;
+    --border: #363c48;
+    --border-input: #6f7889;
+    --text: #dde1e8;
+    --text-muted: #9aa3b4;
+    --accent: #5b9bd5;
+    --accent-hover: #74abdc;
+    --on-accent: #0e1116;
+    --focus: #74abdc;
+    --debit: #7cb3e6;
+    --credit: #ef8079;
+    --danger: #ef8079;
+    --success: #5cc28c;
+    --warning: #e0a24f;
+    --hint-bg: #2e2a1a;
+    --hint-text: #e8d48a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #16191f;
+  --surface: #1f232b;
+  --surface-2: #262b34;
+  --header: #2b303a;
+  --row-hover: #262d38;
+  --row-selected: #22344c;
+  --border: #363c48;
+  --border-input: #6f7889;
+  --text: #dde1e8;
+  --text-muted: #9aa3b4;
+  --accent: #5b9bd5;
+  --accent-hover: #74abdc;
+  --on-accent: #0e1116;
+  --focus: #74abdc;
+  --debit: #7cb3e6;
+  --credit: #ef8079;
+  --danger: #ef8079;
+  --success: #5cc28c;
+  --warning: #e0a24f;
+  --hint-bg: #2e2a1a;
+  --hint-text: #e8d48a;
+  color-scheme: dark;
+}
