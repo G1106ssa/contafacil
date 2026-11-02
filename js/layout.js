@@ -4,6 +4,7 @@
   const MENU = [
     ['Movimento', [
       ['lote', 'lotes.html', 'stack-2', 'Lotes'],
+      ['integracao', 'integracao.html', 'arrows-exchange', 'Integração Fiscal'],
       [null, null, 'arrow-bar-to-down', 'Implantação de saldos'],
       [null, null, 'lock-square', 'Encerramento'],
       [null, null, 'trash', 'Lixeira'],

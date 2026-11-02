@@ -173,7 +173,60 @@
   }
   const excluirAutomatico = async id => ok(await sb.from('lanc_automaticos').delete().eq('id', id));
 
+  // ── integração Fiscal → Contábil (padrão Alterdata: tudo por lançamento automático) ──
+  const integCatalogo = async empresaId => ok(await sb.rpc('integ_catalogo', { p_empresa: empresaId }));
+  const integrarFiscal = async (empresaId, competencia, gravar) =>
+    ok(await sb.rpc('integrar_fiscal', { p_empresa: empresaId, p_competencia: competencia, p_gravar: !!gravar }));
+  async function integConfig(st) {
+    const id = st.empresa.id;
+    const [cfg, cfops, servs, tribs, rets] = await Promise.all([
+      sb.from('integ_config').select('*').eq('empresa_id', id).maybeSingle(),
+      sb.from('integ_cfop').select('cfop, lanc_contabil_id, lanc_pagamento_id').eq('empresa_id', id),
+      sb.from('integ_servico').select('tipo, codigo, lanc_contabil_id, lanc_pagamento_id').eq('empresa_id', id),
+      sb.from('integ_tributo').select('imposto, evento, lanc_id').eq('empresa_id', id),
+      sb.from('integ_retencao').select('tipo, operacao, lanc_id').eq('empresa_id', id),
+    ]);
+    const codPorId = new Map(st.automaticos.map(a => [a.id, a.cod]));
+    const cod = idLa => (idLa ? codPorId.get(idLa) ?? null : null);
+    return {
+      geral: ok(cfg) || { hist_numero: true, hist_participante: true, doc_numero: true },
+      cfop: ok(cfops).map(r => ({ cfop: r.cfop, contabil: cod(r.lanc_contabil_id), pagamento: cod(r.lanc_pagamento_id) })),
+      servico: ok(servs).map(r => ({ tipo: r.tipo, codigo: r.codigo, contabil: cod(r.lanc_contabil_id), pagamento: cod(r.lanc_pagamento_id) })),
+      tributo: ok(tribs).map(r => ({ imposto: r.imposto, evento: r.evento, la: cod(r.lanc_id) })),
+      retencao: ok(rets).map(r => ({ tipo: r.tipo, operacao: r.operacao, la: cod(r.lanc_id) })),
+    };
+  }
+  // grava uma linha da configuração; sem lançamento automático principal, a linha é apagada
+  async function salvarInteg(st, tabela, chave, campos) {
+    const laId = codLa => {
+      if (codLa == null || codLa === '') return null;
+      const a = st.automaticos.find(x => x.cod === Number(codLa));
+      if (!a) throw new Error(`Lançamento automático ${codLa} não existe`);
+      return a.id;
+    };
+    const base = { empresa_id: st.empresa.id, escritorio_id: st.config.escritorio_id, ...chave };
+    const principal = tabela === 'integ_cfop' || tabela === 'integ_servico' ? 'contabil' : 'la';
+    if (campos[principal] == null || campos[principal] === '') {
+      let q = sb.from(tabela).delete().eq('empresa_id', st.empresa.id);
+      for (const [k, v] of Object.entries(chave)) q = q.eq(k, v);
+      ok(await q);
+      return;
+    }
+    const linha = principal === 'contabil'
+      ? { ...base, lanc_contabil_id: laId(campos.contabil), lanc_pagamento_id: laId(campos.pagamento) }
+      : { ...base, lanc_id: laId(campos.la) };
+    const conflito = { integ_cfop: 'empresa_id,cfop', integ_servico: 'empresa_id,tipo,codigo',
+                       integ_tributo: 'empresa_id,imposto,evento', integ_retencao: 'empresa_id,tipo,operacao' }[tabela];
+    ok(await sb.from(tabela).upsert(linha, { onConflict: conflito }));
+  }
+  async function salvarIntegGeral(st, geral) {
+    ok(await sb.from('integ_config').upsert({ empresa_id: st.empresa.id, escritorio_id: st.config.escritorio_id,
+      hist_numero: !!geral.hist_numero, hist_participante: !!geral.hist_participante, doc_numero: !!geral.doc_numero },
+      { onConflict: 'empresa_id' }));
+  }
+
   window.Dados = {
+    integCatalogo, integrarFiscal, integConfig, salvarInteg, salvarIntegGeral,
     sb, sessao, entrar, sair, contexto, escolherEmpresa, ativarEmpresa, carregarEstado,
     novoLote, atualizarLote, liberarLote, reabrirLote, apagarLote,
     gravarLancamento, excluirLancamentos, importar, salvarAutomatico, excluirAutomatico,

@@ -192,6 +192,41 @@ dialog::backdrop { background: rgba(10, 14, 20, .45); }
 
 #dlg-confirm { width: 420px; }
 
+/* central de integração */
+.abas { display: flex; gap: 2px; align-items: center; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.abas [role=tab] { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border: 0; background: none; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--text-muted); font-weight: 600; }
+.abas [role=tab]:hover { color: var(--text); }
+.abas [role=tab][aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+.abas .sp { flex: 1; }
+.aba-corpo { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }
+.ajuda { color: var(--text-muted); font: var(--text-sm) var(--font-sans); line-height: 18px; }
+.tab-wrap { overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.tab-wrap .rel-tab { min-width: 720px; }
+.tab-wrap .rel-tab td { vertical-align: middle; }
+.la-campo { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.la-campo .input.code { width: 64px; }
+.la-nome { font: var(--text-sm) var(--font-sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* tabelas de configuração: colunas fixas, para nada pular de lugar enquanto se digita */
+.cfg-tab { table-layout: fixed; }
+.cfg-tab .la-campo { display: flex; width: 100%; }
+.cfg-tab .la-campo .input.code { flex: none; }
+.cfg-tab .w70 { width: 70px; } .cfg-tab .w90 { width: 96px; } .cfg-tab .w120 { width: 120px; }
+.cfg-tab .w150 { width: 150px; } .cfg-tab .w180 { width: 180px; }
+.comps { display: flex; gap: 8px; flex-wrap: wrap; }
+.comp { display: grid; gap: 1px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface);
+  cursor: pointer; text-align: left; font: var(--text-sm) var(--font-sans); min-width: 104px; }
+.comp b { font: var(--text-md) var(--font-sans); font-weight: 700; }
+.comp:hover { border-color: var(--accent); }
+.comp.sel { border-color: var(--accent); background: var(--row-selected); }
+.resumo-integ { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 10px 12px; }
+.resumo-integ .sp { flex: 1; }
+.sub-t { font: var(--text-md) var(--font-sans); font-weight: 700; margin-top: 4px; }
+.aviso.ok-bg { background: var(--row-selected); color: var(--text); }
+.aviso .btn { text-decoration: none; color: inherit; }
+.geral-integ { display: grid; gap: 6px; max-width: 640px; }
+
 #dlg-lote { width: 560px; }
 .sugestoes { display: flex; flex-wrap: wrap; gap: 6px; }
 .grid td .chip { vertical-align: middle; }
