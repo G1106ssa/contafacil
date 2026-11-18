@@ -45,11 +45,15 @@
   async function contexto() {
     const s = await sessao();
     if (!s) return null;
-    const membros = ok(await pub().from('membros').select('escritorio_id, nome, papel').eq('user_id', s.user.id));
-    const escritorios = ok(await pub().from('escritorios').select('id, nome'));
-    const empresas = ok(await pub().from('empresas').select('id, escritorio_id, razao_social, nome_fantasia, cnpj, regime, ativo').order('razao_social'));
-    const ativas = new Set(ok(await sb.from('config_empresa').select('empresa_id')).map(c => c.empresa_id));
-    for (const e of empresas) { e.ativada = ativas.has(e.id); e.cnpjFmt = fmtCnpj(e.cnpj); }
+    // as quatro consultas não dependem uma da outra: vão juntas
+    const [membros, escritorios, empresas, configs] = (await Promise.all([
+      pub().from('membros').select('escritorio_id, nome, papel').eq('user_id', s.user.id),
+      pub().from('escritorios').select('id, nome'),
+      pub().from('empresas').select('id, escritorio_id, razao_social, nome_fantasia, cnpj, regime, ativo').order('razao_social'),
+      sb.from('config_empresa').select('empresa_id, escritorio_id, plano_id'),
+    ])).map(ok);
+    const cfgPorEmpresa = new Map(configs.map(c => [c.empresa_id, c]));
+    for (const e of empresas) { e.cfg = cfgPorEmpresa.get(e.id) || null; e.ativada = !!e.cfg; e.cnpjFmt = fmtCnpj(e.cnpj); }
     let atual = null;
     try { atual = localStorage.getItem(CHAVE_EMPRESA); } catch { /* ignora */ }
     // empresa escolhida antes; se não houver e só uma estiver ativada, abre essa
@@ -66,32 +70,32 @@
 
   // ── estado da empresa: plano, históricos, automáticos, lotes e lançamentos ──
   async function carregarEstado(emp) {
-    const cfg = ok(await sb.from('config_empresa').select('*').eq('empresa_id', emp.id).single());
-    const contas = await todos(() => sb.from('contas')
-      .select('id, classificacao, chamada, nome, tipo, natureza, grupo, ativa').eq('plano_id', cfg.plano_id).order('classificacao'));
+    // plano e escritório da empresa já vieram no contexto: todas as consultas saem de uma vez
+    const base = emp.cfg || ok(await sb.from('config_empresa').select('empresa_id, escritorio_id, plano_id').eq('empresa_id', emp.id).single());
+    const [cfg, contas, hist, autos, linhas, planoInfo, lotes, lancs] = await Promise.all([
+      sb.from('config_empresa').select('*').eq('empresa_id', emp.id).single().then(ok),
+      todos(() => sb.from('contas')
+        .select('id, classificacao, chamada, nome, tipo, natureza, grupo, ativa').eq('plano_id', base.plano_id).order('classificacao')),
+      sb.from('historicos_padrao').select('id, codigo, texto, empresa_id')
+        .or(`empresa_id.is.null,empresa_id.eq.${emp.id}`).order('codigo').then(ok),
+      // lançamento automático: código e descrição do escritório; contas na linha do plano desta empresa
+      sb.from('lanc_automaticos').select('id, codigo, nome').eq('escritorio_id', base.escritorio_id).order('codigo').then(ok),
+      sb.from('lanc_automatico_planos').select('id, lanc_id, conta_debito_id, conta_credito_id, historico_id, historico_texto, observacao')
+        .eq('plano_id', base.plano_id).then(ok),
+      sb.from('planos').select('id, codigo, nome').eq('id', base.plano_id).single().then(ok),
+      sb.from('lotes')
+        .select('id, codigo, nome, data, tipo, liberado, inf_valor_debito, inf_valor_credito, inf_lanc_auto, inf_contas_debito, inf_contas_credito')
+        .eq('empresa_id', emp.id).order('codigo').then(ok),
+      todos(() => sb.from('lancamentos')
+        .select('id, lote_id, numero, data, historico, documento, lanc_automatico_id, partidas(conta_id, natureza, valor, ordem)')
+        .eq('empresa_id', emp.id).is('excluido_em', null).order('numero')),
+    ]);
     const plano = contas.map(c => ({ id: c.id, c: c.classificacao, ch: c.chamada, n: c.nome, t: c.tipo, nat: c.natureza, g: c.grupo, ativa: c.ativa }));
     const idPorCh = new Map(plano.filter(c => c.ch != null).map(c => [c.ch, c.id]));
     const chPorId = new Map(plano.map(c => [c.id, c.ch]));
-
-    const hist = ok(await sb.from('historicos_padrao').select('id, codigo, texto, empresa_id')
-      .or(`empresa_id.is.null,empresa_id.eq.${emp.id}`).order('codigo'));
     const histCodPorId = new Map(hist.map(h => [h.id, h.codigo]));
-    // lançamento automático: código e descrição do escritório; contas na linha do plano desta empresa
-    const [autos, linhas, planoInfo] = await Promise.all([
-      sb.from('lanc_automaticos').select('id, codigo, nome').eq('escritorio_id', cfg.escritorio_id).order('codigo'),
-      sb.from('lanc_automatico_planos').select('id, lanc_id, conta_debito_id, conta_credito_id, historico_id, historico_texto, observacao')
-        .eq('plano_id', cfg.plano_id),
-      sb.from('planos').select('id, codigo, nome').eq('id', cfg.plano_id).single(),
-    ]).then(rs => rs.map(ok));
     const linhaPorLa = new Map(linhas.map(l => [l.lanc_id, l]));
     const autoCodPorId = new Map(autos.map(a => [a.id, a.codigo]));
-
-    const lotes = ok(await sb.from('lotes')
-      .select('id, codigo, nome, data, tipo, liberado, inf_valor_debito, inf_valor_credito, inf_lanc_auto, inf_contas_debito, inf_contas_credito')
-      .eq('empresa_id', emp.id).order('codigo'));
-    const lancs = await todos(() => sb.from('lancamentos')
-      .select('id, lote_id, numero, data, historico, documento, lanc_automatico_id, partidas(conta_id, natureza, valor, ordem)')
-      .eq('empresa_id', emp.id).is('excluido_em', null).order('numero'));
 
     const porLote = new Map(lotes.map(l => [l.id, []]));
     for (const l of lancs) {
